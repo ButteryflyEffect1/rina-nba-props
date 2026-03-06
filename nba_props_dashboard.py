@@ -333,6 +333,108 @@ def player_name_to_id(name: str):
 
 
 # =========================
+# INJURY INPUT HELPERS
+# =========================
+def parse_injury_input(text: str):
+    """
+    Formats supported:
+    DEN: Jamal Murray
+    PHX: Bradley Beal, Devin Booker
+    LAL: LeBron James doubtful, Anthony Davis questionable
+    """
+    injury_map = {}
+
+    if not text or not text.strip():
+        return injury_map
+
+    lines = text.splitlines()
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or ":" not in line:
+            continue
+
+        team, players_part = line.split(":", 1)
+        team = team.strip().upper()
+
+        if team not in TEAM_ABBR_TO_ID:
+            continue
+
+        injury_map[team] = {
+            "out": [],
+            "questionable": [],
+            "doubtful": [],
+            "probable": []
+        }
+
+        players_list = [p.strip() for p in players_part.split(",") if p.strip()]
+
+        for item in players_list:
+            lower_item = item.lower()
+
+            if lower_item.endswith(" questionable"):
+                player_name = item[: -len(" questionable")].strip()
+                if player_name:
+                    injury_map[team]["questionable"].append(player_name)
+            elif lower_item.endswith(" doubtful"):
+                player_name = item[: -len(" doubtful")].strip()
+                if player_name:
+                    injury_map[team]["doubtful"].append(player_name)
+            elif lower_item.endswith(" probable"):
+                player_name = item[: -len(" probable")].strip()
+                if player_name:
+                    injury_map[team]["probable"].append(player_name)
+            elif lower_item.endswith(" out"):
+                player_name = item[: -len(" out")].strip()
+                if player_name:
+                    injury_map[team]["out"].append(player_name)
+            else:
+                injury_map[team]["out"].append(item)
+
+    return injury_map
+
+
+def injury_adjustment(team_injuries, stat):
+    out_count = len(team_injuries.get("out", []))
+    questionable_count = len(team_injuries.get("questionable", []))
+    doubtful_count = len(team_injuries.get("doubtful", []))
+    probable_count = len(team_injuries.get("probable", []))
+
+    projection_boost = 1.0
+    hidden_gem_boost = 0.0
+    note_parts = []
+
+    if out_count > 0:
+        if stat == "PTS":
+            projection_boost += min(0.06, out_count * 0.02)
+            hidden_gem_boost += min(5.0, out_count * 2.0)
+        elif stat == "AST":
+            projection_boost += min(0.05, out_count * 0.018)
+            hidden_gem_boost += min(4.5, out_count * 1.8)
+        elif stat == "REB":
+            projection_boost += min(0.04, out_count * 0.015)
+            hidden_gem_boost += min(4.0, out_count * 1.5)
+
+        note_parts.append(f"{out_count} out")
+
+    if doubtful_count > 0:
+        projection_boost += min(0.02, doubtful_count * 0.008)
+        hidden_gem_boost += min(2.0, doubtful_count * 0.8)
+        note_parts.append(f"{doubtful_count} doubtful")
+
+    if questionable_count > 0:
+        projection_boost += min(0.01, questionable_count * 0.005)
+        hidden_gem_boost += min(1.0, questionable_count * 0.5)
+        note_parts.append(f"{questionable_count} questionable")
+
+    if probable_count > 0:
+        note_parts.append(f"{probable_count} probable")
+
+    note = ", ".join(note_parts) if note_parts else "No major injury context"
+    return round(projection_boost, 4), round(hidden_gem_boost, 1), note
+
+
+# =========================
 # ODDS API HELPERS
 # =========================
 def api_get(url: str, params=None):
@@ -558,8 +660,7 @@ def get_team_game_log(team_id: int):
 def stat_average(df: pd.DataFrame, stat: str, n: int):
     if df.empty or stat not in df.columns:
         return math.nan
-    sample = df.head(n)
-    vals = pd.to_numeric(sample[stat], errors="coerce").dropna()
+    vals = pd.to_numeric(df.head(n)[stat], errors="coerce").dropna()
     if vals.empty:
         return math.nan
     return round(vals.mean(), 2)
@@ -568,8 +669,7 @@ def stat_average(df: pd.DataFrame, stat: str, n: int):
 def stat_hit_rate(df: pd.DataFrame, stat: str, line: float, n: int):
     if df.empty or stat not in df.columns:
         return math.nan
-    sample = df.head(n)
-    vals = pd.to_numeric(sample[stat], errors="coerce").dropna()
+    vals = pd.to_numeric(df.head(n)[stat], errors="coerce").dropna()
     if vals.empty:
         return math.nan
     return round((vals > line).mean() * 100, 1)
@@ -587,8 +687,7 @@ def season_average(df: pd.DataFrame, stat: str):
 def minutes_average(df: pd.DataFrame, n: int):
     if df.empty or "MIN" not in df.columns:
         return math.nan
-    sample = df.head(n)
-    mins = pd.to_numeric(sample["MIN"], errors="coerce").dropna()
+    mins = pd.to_numeric(df.head(n)["MIN"], errors="coerce").dropna()
     if mins.empty:
         return math.nan
     return round(mins.mean(), 2)
@@ -670,9 +769,7 @@ def minutes_stability_score(log_df: pd.DataFrame, n: int = 10):
     if log_df.empty or "MIN" not in log_df.columns:
         return 50.0
 
-    sample = log_df.head(n)
-    mins = pd.to_numeric(sample["MIN"], errors="coerce").dropna()
-
+    mins = pd.to_numeric(log_df.head(n)["MIN"], errors="coerce").dropna()
     if len(mins) < 2:
         return 50.0
 
@@ -691,9 +788,7 @@ def stat_volatility_penalty(log_df: pd.DataFrame, stat: str, n: int = 10):
     if log_df.empty or stat not in log_df.columns:
         return 0.0
 
-    sample = log_df.head(n)
-    vals = pd.to_numeric(sample[stat], errors="coerce").dropna()
-
+    vals = pd.to_numeric(log_df.head(n)[stat], errors="coerce").dropna()
     if len(vals) < 2:
         return 0.0
 
@@ -715,31 +810,14 @@ def opponent_team_id(team_abbr: str):
     return TEAM_ABBR_TO_ID.get(team_abbr)
 
 
-def team_pts_allowed_proxy(team_log_df: pd.DataFrame, n: int = 10):
-    if team_log_df.empty or "PTS" not in team_log_df.columns:
-        return math.nan
-    pts = pd.to_numeric(team_log_df.head(n)["PTS"], errors="coerce").dropna()
-    if pts.empty:
-        return math.nan
-    # team scored points is not points allowed; using W/L log alone is limited.
-    return round(pts.mean(), 2)
-
-
 def team_defense_rank_proxy(team_log_df: pd.DataFrame):
-    """
-    Proxy using recent win percentage + point differential style fields when available.
-    Lower defensive quality -> easier matchup.
-    Because teamgamelog is limited, this is a simplified pregame DVP proxy.
-    """
     if team_log_df.empty:
         return 15
 
     sample = team_log_df.head(10).copy()
-
     wins = (sample["WL"] == "W").sum() if "WL" in sample.columns else 5
     win_pct = wins / max(len(sample), 1)
 
-    # weaker recent team = easier DVP
     if win_pct <= 0.30:
         return 26
     if win_pct <= 0.40:
@@ -754,12 +832,8 @@ def team_defense_rank_proxy(team_log_df: pd.DataFrame):
 
 
 def dvp_multiplier_from_rank(rank_proxy: float):
-    """
-    Higher rank number = weaker defense = easier matchup
-    """
     if pd.isna(rank_proxy):
         return 1.00, "Neutral matchup"
-
     if rank_proxy >= 26:
         return 1.07, "Elite matchup"
     if rank_proxy >= 21:
@@ -872,7 +946,7 @@ def get_lean(projection: float, line: float, threshold: float = 1.0):
 # =========================
 # BUILD CHEATSHEET
 # =========================
-def build_cheatsheet(props_df: pd.DataFrame):
+def build_cheatsheet(props_df: pd.DataFrame, injury_map: dict):
     if props_df.empty:
         return pd.DataFrame()
 
@@ -908,6 +982,13 @@ def build_cheatsheet(props_df: pd.DataFrame):
         team = infer_team_from_log(log)
         team, opponent = get_team_and_opponent(team, home_team, away_team)
 
+        team_injuries = injury_map.get(team, {
+            "out": [],
+            "questionable": [],
+            "doubtful": [],
+            "probable": []
+        })
+
         l5_hit = stat_hit_rate(log, stat, line, 5)
         l10_hit = stat_hit_rate(log, stat, line, 10)
 
@@ -924,9 +1005,10 @@ def build_cheatsheet(props_df: pd.DataFrame):
         volatility_pen = stat_volatility_penalty(log, stat, 10)
 
         dvp_rank, dvp_mult, dvp_bonus, dvp_note = opponent_dvp_context(opponent)
+        proj_boost, gem_boost, injury_note = injury_adjustment(team_injuries, stat)
 
         projection = (
-            round(base_projection * dvp_mult, 2)
+            round(base_projection * dvp_mult * proj_boost, 2)
             if not pd.isna(base_projection)
             else math.nan
         )
@@ -942,6 +1024,7 @@ def build_cheatsheet(props_df: pd.DataFrame):
             volatility_penalty=volatility_pen,
             dvp_bonus=dvp_bonus,
         )
+        hidden_gem = max(0, min(100, hidden_gem + gem_boost))
 
         lean = get_lean(projection, line)
 
@@ -963,6 +1046,7 @@ def build_cheatsheet(props_df: pd.DataFrame):
                 "VOLATILITY_PENALTY": volatility_pen,
                 "DVP_RANK": dvp_rank,
                 "DVP_NOTE": dvp_note,
+                "INJURY_NOTE": injury_note,
                 "PROJECTION": projection,
                 "EDGE": edge,
                 "CONFIDENCE": hidden_gem,
@@ -1142,6 +1226,9 @@ def render_full_cheatsheet_cards(df: pd.DataFrame):
                 st.caption("DVP")
                 st.markdown(f"**{row['DVP_NOTE']}**")
 
+            st.caption("Injury Context")
+            st.markdown(f"**{row.get('INJURY_NOTE', 'No major injury context')}**")
+
 
 # =========================
 # SIDEBAR
@@ -1157,6 +1244,14 @@ with st.sidebar:
         "Filter stat",
         ["ALL", "PTS", "REB", "AST"],
         index=0
+    )
+
+    st.markdown("### Pregame Injuries")
+    injury_text = st.text_area(
+        "Enter injuries",
+        value="",
+        height=140,
+        placeholder="DEN: Jamal Murray out\nLAL: Anthony Davis questionable\nPHX: Bradley Beal out"
     )
 
 
@@ -1197,7 +1292,8 @@ if run_model:
         st.warning("No props matched your filters.")
         st.stop()
 
-    cheatsheet = build_cheatsheet(props_df)
+    injury_map = parse_injury_input(injury_text)
+    cheatsheet = build_cheatsheet(props_df, injury_map)
 
     if cheatsheet.empty:
         st.warning("No data returned after processing.")
@@ -1238,4 +1334,4 @@ if run_model:
     )
 
 else:
-    st.info("Choose a view, optional filters, and click Run Selected View.")
+    st.info("Choose a view, optional filters, add injuries if needed, and click Run Selected View.")
