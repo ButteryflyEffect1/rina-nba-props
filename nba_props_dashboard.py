@@ -71,19 +71,13 @@ st.markdown(
         color: #f8fafc;
     }
 
-    .cards-grid {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 10px;
-        margin-bottom: 10px;
-    }
-
     .bet-card {
         background: linear-gradient(180deg, rgba(18, 25, 41, 0.96), rgba(13, 19, 32, 0.96));
         border: 1px solid rgba(148, 163, 184, 0.16);
         border-radius: 16px;
         padding: 12px 14px;
         box-shadow: 0 8px 20px rgba(0, 0, 0, 0.20);
+        margin-bottom: 10px;
     }
 
     .bet-top {
@@ -528,11 +522,15 @@ def get_game_log(player_id: int):
 
     df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"])
     df = df.sort_values("GAME_DATE", ascending=False).reset_index(drop=True)
+
+    if "MIN" in df.columns:
+        df["MIN"] = pd.to_numeric(df["MIN"], errors="coerce")
+
     return df
 
 
 # =========================
-# MODEL
+# MODEL HELPERS
 # =========================
 def stat_average(df: pd.DataFrame, stat: str, n: int):
     if df.empty or stat not in df.columns:
@@ -540,7 +538,7 @@ def stat_average(df: pd.DataFrame, stat: str, n: int):
     sample = df.head(n)
     if sample.empty:
         return math.nan
-    return round(sample[stat].mean(), 2)
+    return round(pd.to_numeric(sample[stat], errors="coerce").mean(), 2)
 
 
 def stat_hit_rate(df: pd.DataFrame, stat: str, line: float, n: int):
@@ -549,13 +547,83 @@ def stat_hit_rate(df: pd.DataFrame, stat: str, line: float, n: int):
     sample = df.head(n)
     if sample.empty:
         return math.nan
-    return round((sample[stat] > line).mean() * 100, 1)
+
+    vals = pd.to_numeric(sample[stat], errors="coerce")
+    vals = vals.dropna()
+    if vals.empty:
+        return math.nan
+
+    return round((vals > line).mean() * 100, 1)
 
 
 def season_average(df: pd.DataFrame, stat: str):
     if df.empty or stat not in df.columns:
         return math.nan
-    return round(df[stat].mean(), 2)
+    vals = pd.to_numeric(df[stat], errors="coerce").dropna()
+    if vals.empty:
+        return math.nan
+    return round(vals.mean(), 2)
+
+
+def minutes_average(df: pd.DataFrame, n: int):
+    if df.empty or "MIN" not in df.columns:
+        return math.nan
+    sample = df.head(n)
+    mins = pd.to_numeric(sample["MIN"], errors="coerce").dropna()
+    if mins.empty:
+        return math.nan
+    return round(mins.mean(), 2)
+
+
+def season_minutes_average(df: pd.DataFrame):
+    if df.empty or "MIN" not in df.columns:
+        return math.nan
+    mins = pd.to_numeric(df["MIN"], errors="coerce").dropna()
+    if mins.empty:
+        return math.nan
+    return round(mins.mean(), 2)
+
+
+def expected_minutes(df: pd.DataFrame):
+    l5 = minutes_average(df, 5)
+    l10 = minutes_average(df, 10)
+    season = season_minutes_average(df)
+
+    vals = [l5, l10, season]
+    if all(pd.isna(v) for v in vals):
+        return math.nan
+
+    l5 = 0 if pd.isna(l5) else l5
+    l10 = 0 if pd.isna(l10) else l10
+    season = 0 if pd.isna(season) else season
+
+    return round(0.5 * l5 + 0.3 * l10 + 0.2 * season, 2)
+
+
+def stat_per_minute(df: pd.DataFrame, stat: str):
+    if df.empty or stat not in df.columns or "MIN" not in df.columns:
+        return math.nan
+
+    vals = pd.to_numeric(df[stat], errors="coerce")
+    mins = pd.to_numeric(df["MIN"], errors="coerce")
+
+    temp = pd.DataFrame({"stat": vals, "min": mins}).dropna()
+    temp = temp[temp["min"] > 0]
+
+    if temp.empty:
+        return math.nan
+
+    return round(temp["stat"].sum() / temp["min"].sum(), 4)
+
+
+def minutes_based_projection(df: pd.DataFrame, stat: str):
+    spm = stat_per_minute(df, stat)
+    exp_min = expected_minutes(df)
+
+    if pd.isna(spm) or pd.isna(exp_min):
+        return math.nan
+
+    return round(spm * exp_min, 2)
 
 
 def build_projection(l5_avg: float, l10_avg: float, season_avg: float):
@@ -565,6 +633,17 @@ def build_projection(l5_avg: float, l10_avg: float, season_avg: float):
     return round(0.5 * l5_avg + 0.3 * l10_avg + 0.2 * season_avg, 2)
 
 
+def final_projection(old_projection: float, min_projection: float):
+    if pd.isna(old_projection) and pd.isna(min_projection):
+        return math.nan
+    if pd.isna(old_projection):
+        return round(min_projection, 2)
+    if pd.isna(min_projection):
+        return round(old_projection, 2)
+
+    return round(0.4 * old_projection + 0.6 * min_projection, 2)
+
+
 def edge_score(edge: float):
     if pd.isna(edge):
         return 50.0
@@ -572,11 +651,81 @@ def edge_score(edge: float):
     return max(0, min(100, round(score, 1)))
 
 
-def confidence_score(l5_hit: float, l10_hit: float, edge: float):
+def minutes_stability_score(log_df: pd.DataFrame, n: int = 10):
+    if log_df.empty or "MIN" not in log_df.columns:
+        return 50.0
+
+    sample = log_df.head(n)
+    mins = pd.to_numeric(sample["MIN"], errors="coerce").dropna()
+
+    if len(mins) < 2:
+        return 50.0
+
+    mean = mins.mean()
+    std = mins.std()
+
+    if mean == 0 or pd.isna(std):
+        return 50.0
+
+    cv = std / mean
+    score = 100 - (cv * 100)
+
+    return max(0, min(100, round(score, 1)))
+
+
+def stat_volatility_penalty(log_df: pd.DataFrame, stat: str, n: int = 10):
+    if log_df.empty or stat not in log_df.columns:
+        return 0.0
+
+    sample = log_df.head(n)
+    vals = pd.to_numeric(sample[stat], errors="coerce").dropna()
+
+    if len(vals) < 2:
+        return 0.0
+
+    mean = vals.mean()
+    std = vals.std()
+
+    if mean == 0 or pd.isna(std):
+        return 0.0
+
+    cv = std / mean
+    penalty = min(20, cv * 25)
+
+    return round(penalty, 1)
+
+
+def improved_hidden_gem_score(
+    l5_hit: float,
+    l10_hit: float,
+    edge: float,
+    minutes_stability: float,
+    expected_min: float,
+    volatility_penalty: float,
+):
     l5 = 50.0 if pd.isna(l5_hit) else l5_hit
     l10 = 50.0 if pd.isna(l10_hit) else l10_hit
+    m_stab = 50.0 if pd.isna(minutes_stability) else minutes_stability
     e_score = edge_score(edge)
-    return round(0.4 * l5 + 0.3 * l10 + 0.3 * e_score, 1)
+
+    score = (
+        0.22 * l5 +
+        0.28 * l10 +
+        0.30 * e_score +
+        0.20 * m_stab
+    )
+
+    score = score - (0 if pd.isna(volatility_penalty) else volatility_penalty)
+
+    if not pd.isna(expected_min):
+        if expected_min < 20:
+            score = min(score, 58)
+        elif expected_min < 24:
+            score = min(score, 68)
+        elif expected_min < 28:
+            score = min(score, 80)
+
+    return round(max(0, min(100, score)), 1)
 
 
 def infer_team_from_log(log_df: pd.DataFrame):
@@ -604,6 +753,9 @@ def get_lean(projection: float, line: float, threshold: float = 1.0):
     return "PASS"
 
 
+# =========================
+# BUILD CHEATSHEET
+# =========================
 def build_cheatsheet(props_df: pd.DataFrame):
     if props_df.empty:
         return pd.DataFrame()
@@ -642,13 +794,28 @@ def build_cheatsheet(props_df: pd.DataFrame):
 
         l5_hit = stat_hit_rate(log, stat, line, 5)
         l10_hit = stat_hit_rate(log, stat, line, 10)
+
         l5_avg = stat_average(log, stat, 5)
         l10_avg = stat_average(log, stat, 10)
         s_avg = season_average(log, stat)
 
-        projection = build_projection(l5_avg, l10_avg, s_avg)
+        old_proj = build_projection(l5_avg, l10_avg, s_avg)
+        min_proj = minutes_based_projection(log, stat)
+        projection = final_projection(old_proj, min_proj)
+
+        exp_min = expected_minutes(log)
+        min_stability = minutes_stability_score(log, 10)
+        volatility_pen = stat_volatility_penalty(log, stat, 10)
+
         edge = round(projection - line, 2) if not pd.isna(projection) else math.nan
-        confidence = confidence_score(l5_hit, l10_hit, edge)
+        hidden_gem = improved_hidden_gem_score(
+            l5_hit=l5_hit,
+            l10_hit=l10_hit,
+            edge=edge,
+            minutes_stability=min_stability,
+            expected_min=exp_min,
+            volatility_penalty=volatility_pen,
+        )
         lean = get_lean(projection, line)
 
         rows.append(
@@ -664,9 +831,12 @@ def build_cheatsheet(props_df: pd.DataFrame):
                 "L5_AVG": l5_avg,
                 "L10_AVG": l10_avg,
                 "SEASON_AVG": s_avg,
+                "EXPECTED_MIN": exp_min,
+                "MIN_STABILITY": min_stability,
+                "VOLATILITY_PENALTY": volatility_pen,
                 "PROJECTION": projection,
                 "EDGE": edge,
-                "CONFIDENCE": confidence,
+                "CONFIDENCE": hidden_gem,
                 "LEAN": lean,
             }
         )
@@ -823,11 +993,22 @@ def render_full_cheatsheet_cards(df: pd.DataFrame):
                 st.caption("Last 10 Avg")
                 st.markdown(f"**{format_num(row['L10_AVG'])}**")
             with detail_cols[2]:
+                st.caption("Expected Min")
+                st.markdown(f"**{format_num(row['EXPECTED_MIN'])}**")
+            with detail_cols[3]:
+                st.caption("Min Stability")
+                st.markdown(f"**{format_num(row['MIN_STABILITY'], 0)}%**")
+
+            detail_cols2 = st.columns(3)
+            with detail_cols2[0]:
                 st.caption("Season Avg")
                 st.markdown(f"**{format_num(row['SEASON_AVG'])}**")
-            with detail_cols[3]:
+            with detail_cols2[1]:
                 st.caption("Hit% L5")
                 st.markdown(f"**{format_num(row['L5_HIT_RATE'], 0)}%**")
+            with detail_cols2[2]:
+                st.caption("Volatility Penalty")
+                st.markdown(f"**{format_num(row['VOLATILITY_PENALTY'])}**")
 
 
 # =========================
@@ -847,7 +1028,6 @@ with st.sidebar:
     )
 
 
-# lighter player selector from props preview only
 props_preview = get_props()
 player_options_preview = []
 if not props_preview.empty:
@@ -868,10 +1048,6 @@ with st.sidebar:
 # =========================
 # MAIN
 # =========================
-if not ODDS_API_KEY or "PASTE_YOUR" in ODDS_API_KEY:
-    st.warning("Add your real The Odds API key at the top of the file first.")
-    st.stop()
-
 if run_model:
     props_df = get_props()
 
@@ -930,6 +1106,4 @@ if run_model:
     )
 
 else:
-
     st.info("Choose a view, optional filters, and click Run Selected View.")
-
