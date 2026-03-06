@@ -4,8 +4,8 @@ import requests
 import pandas as pd
 import streamlit as st
 
-from nba_api.stats.static import players
-from nba_api.stats.endpoints import playergamelog
+from nba_api.stats.static import players, teams
+from nba_api.stats.endpoints import playergamelog, teamgamelog
 
 
 # =========================
@@ -278,6 +278,9 @@ TEAM_NAME_TO_ABBR = {
     "washington wizards": "WAS",
 }
 
+NBA_TEAMS = teams.get_teams()
+TEAM_ABBR_TO_ID = {t["abbreviation"]: t["id"] for t in NBA_TEAMS}
+
 
 def team_name_to_abbr(name: str):
     if not isinstance(name, str):
@@ -529,6 +532,26 @@ def get_game_log(player_id: int):
     return df
 
 
+@st.cache_data(ttl=21600)
+def get_team_game_log(team_id: int):
+    time.sleep(REQUEST_SLEEP)
+
+    gl = teamgamelog.TeamGameLog(
+        team_id=team_id,
+        season=SEASON,
+        season_type_all_star="Regular Season",
+    )
+
+    df = gl.get_data_frames()[0]
+
+    if df.empty:
+        return df
+
+    df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"])
+    df = df.sort_values("GAME_DATE", ascending=False).reset_index(drop=True)
+    return df
+
+
 # =========================
 # MODEL HELPERS
 # =========================
@@ -536,23 +559,19 @@ def stat_average(df: pd.DataFrame, stat: str, n: int):
     if df.empty or stat not in df.columns:
         return math.nan
     sample = df.head(n)
-    if sample.empty:
+    vals = pd.to_numeric(sample[stat], errors="coerce").dropna()
+    if vals.empty:
         return math.nan
-    return round(pd.to_numeric(sample[stat], errors="coerce").mean(), 2)
+    return round(vals.mean(), 2)
 
 
 def stat_hit_rate(df: pd.DataFrame, stat: str, line: float, n: int):
     if df.empty or stat not in df.columns:
         return math.nan
     sample = df.head(n)
-    if sample.empty:
-        return math.nan
-
-    vals = pd.to_numeric(sample[stat], errors="coerce")
-    vals = vals.dropna()
+    vals = pd.to_numeric(sample[stat], errors="coerce").dropna()
     if vals.empty:
         return math.nan
-
     return round((vals > line).mean() * 100, 1)
 
 
@@ -589,8 +608,7 @@ def expected_minutes(df: pd.DataFrame):
     l10 = minutes_average(df, 10)
     season = season_minutes_average(df)
 
-    vals = [l5, l10, season]
-    if all(pd.isna(v) for v in vals):
+    if all(pd.isna(v) for v in [l5, l10, season]):
         return math.nan
 
     l5 = 0 if pd.isna(l5) else l5
@@ -606,7 +624,6 @@ def stat_per_minute(df: pd.DataFrame, stat: str):
 
     vals = pd.to_numeric(df[stat], errors="coerce")
     mins = pd.to_numeric(df["MIN"], errors="coerce")
-
     temp = pd.DataFrame({"stat": vals, "min": mins}).dropna()
     temp = temp[temp["min"] > 0]
 
@@ -627,8 +644,7 @@ def minutes_based_projection(df: pd.DataFrame, stat: str):
 
 
 def build_projection(l5_avg: float, l10_avg: float, season_avg: float):
-    values = [l5_avg, l10_avg, season_avg]
-    if any(pd.isna(v) for v in values):
+    if any(pd.isna(v) for v in [l5_avg, l10_avg, season_avg]):
         return math.nan
     return round(0.5 * l5_avg + 0.3 * l10_avg + 0.2 * season_avg, 2)
 
@@ -640,7 +656,6 @@ def final_projection(old_projection: float, min_projection: float):
         return round(min_projection, 2)
     if pd.isna(min_projection):
         return round(old_projection, 2)
-
     return round(0.4 * old_projection + 0.6 * min_projection, 2)
 
 
@@ -669,7 +684,6 @@ def minutes_stability_score(log_df: pd.DataFrame, n: int = 10):
 
     cv = std / mean
     score = 100 - (cv * 100)
-
     return max(0, min(100, round(score, 1)))
 
 
@@ -691,8 +705,108 @@ def stat_volatility_penalty(log_df: pd.DataFrame, stat: str, n: int = 10):
 
     cv = std / mean
     penalty = min(20, cv * 25)
-
     return round(penalty, 1)
+
+
+# =========================
+# DVP / MATCHUP HELPERS
+# =========================
+def opponent_team_id(team_abbr: str):
+    return TEAM_ABBR_TO_ID.get(team_abbr)
+
+
+def team_pts_allowed_proxy(team_log_df: pd.DataFrame, n: int = 10):
+    if team_log_df.empty or "PTS" not in team_log_df.columns:
+        return math.nan
+    pts = pd.to_numeric(team_log_df.head(n)["PTS"], errors="coerce").dropna()
+    if pts.empty:
+        return math.nan
+    # team scored points is not points allowed; using W/L log alone is limited.
+    return round(pts.mean(), 2)
+
+
+def team_defense_rank_proxy(team_log_df: pd.DataFrame):
+    """
+    Proxy using recent win percentage + point differential style fields when available.
+    Lower defensive quality -> easier matchup.
+    Because teamgamelog is limited, this is a simplified pregame DVP proxy.
+    """
+    if team_log_df.empty:
+        return 15
+
+    sample = team_log_df.head(10).copy()
+
+    wins = (sample["WL"] == "W").sum() if "WL" in sample.columns else 5
+    win_pct = wins / max(len(sample), 1)
+
+    # weaker recent team = easier DVP
+    if win_pct <= 0.30:
+        return 26
+    if win_pct <= 0.40:
+        return 22
+    if win_pct <= 0.50:
+        return 18
+    if win_pct <= 0.60:
+        return 14
+    if win_pct <= 0.70:
+        return 10
+    return 6
+
+
+def dvp_multiplier_from_rank(rank_proxy: float):
+    """
+    Higher rank number = weaker defense = easier matchup
+    """
+    if pd.isna(rank_proxy):
+        return 1.00, "Neutral matchup"
+
+    if rank_proxy >= 26:
+        return 1.07, "Elite matchup"
+    if rank_proxy >= 21:
+        return 1.04, "Strong matchup"
+    if rank_proxy >= 16:
+        return 1.01, "Slightly favorable matchup"
+    if rank_proxy >= 11:
+        return 0.99, "Slightly difficult matchup"
+    if rank_proxy >= 6:
+        return 0.96, "Tough matchup"
+    return 0.93, "Very tough matchup"
+
+
+def dvp_bonus_from_rank(rank_proxy: float):
+    if pd.isna(rank_proxy):
+        return 0.0
+    if rank_proxy >= 26:
+        return 5.0
+    if rank_proxy >= 21:
+        return 3.0
+    if rank_proxy >= 16:
+        return 1.0
+    if rank_proxy >= 11:
+        return -1.0
+    if rank_proxy >= 6:
+        return -3.0
+    return -5.0
+
+
+def opponent_dvp_context(opponent_abbr: str):
+    if not opponent_abbr:
+        return math.nan, 1.00, 0.0, "Neutral matchup"
+
+    opp_id = opponent_team_id(opponent_abbr)
+    if not opp_id:
+        return math.nan, 1.00, 0.0, "Neutral matchup"
+
+    try:
+        team_log = get_team_game_log(opp_id)
+    except Exception:
+        return math.nan, 1.00, 0.0, "Neutral matchup"
+
+    rank_proxy = team_defense_rank_proxy(team_log)
+    mult, note = dvp_multiplier_from_rank(rank_proxy)
+    bonus = dvp_bonus_from_rank(rank_proxy)
+
+    return rank_proxy, mult, bonus, note
 
 
 def improved_hidden_gem_score(
@@ -702,6 +816,7 @@ def improved_hidden_gem_score(
     minutes_stability: float,
     expected_min: float,
     volatility_penalty: float,
+    dvp_bonus: float = 0.0,
 ):
     l5 = 50.0 if pd.isna(l5_hit) else l5_hit
     l10 = 50.0 if pd.isna(l10_hit) else l10_hit
@@ -716,6 +831,7 @@ def improved_hidden_gem_score(
     )
 
     score = score - (0 if pd.isna(volatility_penalty) else volatility_penalty)
+    score = score + dvp_bonus
 
     if not pd.isna(expected_min):
         if expected_min < 20:
@@ -801,13 +917,22 @@ def build_cheatsheet(props_df: pd.DataFrame):
 
         old_proj = build_projection(l5_avg, l10_avg, s_avg)
         min_proj = minutes_based_projection(log, stat)
-        projection = final_projection(old_proj, min_proj)
+        base_projection = final_projection(old_proj, min_proj)
 
         exp_min = expected_minutes(log)
         min_stability = minutes_stability_score(log, 10)
         volatility_pen = stat_volatility_penalty(log, stat, 10)
 
+        dvp_rank, dvp_mult, dvp_bonus, dvp_note = opponent_dvp_context(opponent)
+
+        projection = (
+            round(base_projection * dvp_mult, 2)
+            if not pd.isna(base_projection)
+            else math.nan
+        )
+
         edge = round(projection - line, 2) if not pd.isna(projection) else math.nan
+
         hidden_gem = improved_hidden_gem_score(
             l5_hit=l5_hit,
             l10_hit=l10_hit,
@@ -815,7 +940,9 @@ def build_cheatsheet(props_df: pd.DataFrame):
             minutes_stability=min_stability,
             expected_min=exp_min,
             volatility_penalty=volatility_pen,
+            dvp_bonus=dvp_bonus,
         )
+
         lean = get_lean(projection, line)
 
         rows.append(
@@ -834,6 +961,8 @@ def build_cheatsheet(props_df: pd.DataFrame):
                 "EXPECTED_MIN": exp_min,
                 "MIN_STABILITY": min_stability,
                 "VOLATILITY_PENALTY": volatility_pen,
+                "DVP_RANK": dvp_rank,
+                "DVP_NOTE": dvp_note,
                 "PROJECTION": projection,
                 "EDGE": edge,
                 "CONFIDENCE": hidden_gem,
@@ -999,7 +1128,7 @@ def render_full_cheatsheet_cards(df: pd.DataFrame):
                 st.caption("Min Stability")
                 st.markdown(f"**{format_num(row['MIN_STABILITY'], 0)}%**")
 
-            detail_cols2 = st.columns(3)
+            detail_cols2 = st.columns(4)
             with detail_cols2[0]:
                 st.caption("Season Avg")
                 st.markdown(f"**{format_num(row['SEASON_AVG'])}**")
@@ -1009,6 +1138,9 @@ def render_full_cheatsheet_cards(df: pd.DataFrame):
             with detail_cols2[2]:
                 st.caption("Volatility Penalty")
                 st.markdown(f"**{format_num(row['VOLATILITY_PENALTY'])}**")
+            with detail_cols2[3]:
+                st.caption("DVP")
+                st.markdown(f"**{row['DVP_NOTE']}**")
 
 
 # =========================
