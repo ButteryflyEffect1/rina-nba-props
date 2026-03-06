@@ -11,7 +11,7 @@ from nba_api.stats.endpoints import playergamelog
 # =========================
 # CONFIG
 # =========================
-ODDS_API_KEY = "953ebe05d37958a0e50479e71709462d"
+ODDS_API_KEY = st.secrets["953ebe05d37958a0e50479e71709462d"]
 
 SPORT = "basketball_nba"
 REGIONS = "us"
@@ -930,4 +930,5 @@ if run_model:
     )
 
 else:
+
     st.info("Choose a view, optional filters, and click Run Selected View.")
