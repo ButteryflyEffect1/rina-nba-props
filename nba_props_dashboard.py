@@ -90,14 +90,6 @@ st.markdown(
         margin-bottom: 10px;
     }
 
-    .bet-top {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 10px;
-        margin-bottom: 8px;
-    }
-
     .player-name {
         font-size: 0.98rem;
         font-weight: 800;
@@ -116,6 +108,7 @@ st.markdown(
         gap: 6px;
         flex-wrap: wrap;
         margin-top: 6px;
+        margin-bottom: 8px;
     }
 
     .pill {
@@ -221,10 +214,6 @@ st.markdown(
 
     [data-testid="collapsedControl"] {
         display: none;
-    }
-
-    div[data-testid="stVerticalBlock"] > div:has(> div > div > div.metric-box-wrap) {
-        gap: 0.45rem;
     }
 
     @media (max-width: 950px) {
@@ -1119,21 +1108,35 @@ def render_single_card(row, rank_num=None):
     pill_class = lean_pill_class(row["LEAN"])
 
     with st.container():
-        st.markdown('<div class="bet-card">', unsafe_allow_html=True)
-
         top_left, top_right = st.columns([5, 1])
 
         with top_left:
-            rank_html = f"<span class='rank-badge'>#{rank_num}</span>" if rank_num is not None else ""
-            st.markdown(
-                f"""
-                <div class="row-head">
-                    {rank_html}
-                    <div>
+            if rank_num is not None:
+                st.markdown(
+                    f"""
+                    <div class="bet-card">
+                        <div class="row-head">
+                            <span class="rank-badge">#{rank_num}</span>
+                            <div>
+                                <div class="player-name">{row['PLAYER']}</div>
+                                <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
+                            </div>
+                        </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f"""
+                    <div class="bet-card">
                         <div class="player-name">{row['PLAYER']}</div>
                         <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
-                    </div>
-                </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+            st.markdown(
+                f"""
                 <div class="pill-row">
                     <span class="pill pill-stat">{row['STAT']}</span>
                     <span class="pill {pill_class}">{row['LEAN']}</span>
@@ -1145,9 +1148,11 @@ def render_single_card(row, rank_num=None):
         with top_right:
             st.markdown(
                 f"""
-                <div class="card-linebox">
-                    <div class="line-label">Line</div>
-                    <div class="line-value">{format_num(row['LINE'])}</div>
+                <div style="padding-top:2px;">
+                    <div class="card-linebox">
+                        <div class="line-label">Line</div>
+                        <div class="line-value">{format_num(row['LINE'])}</div>
+                    </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -1171,7 +1176,7 @@ def render_single_card(row, rank_num=None):
         with metric_cols_2[2]:
             render_metric_box("Injury Context", row.get("INJURY_NOTE", "No major injury context"))
 
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_bet_cards(df: pd.DataFrame, lean_type: str):
@@ -1193,7 +1198,7 @@ def render_bet_cards(df: pd.DataFrame, lean_type: str):
         return
 
     for _, row in subset.iterrows():
-        render_single_card(row)
+        render_single_card(row, rank_num=None)
 
 
 def render_full_cheatsheet_cards(df: pd.DataFrame):
@@ -1384,3 +1389,4 @@ if run_model:
 
 else:
     st.info("Pick your filters, add injuries in the dropdowns if needed, then click Run Selected View.")
+
