@@ -1181,73 +1181,76 @@ def render_single_card(row, rank_num=None, compact=False):
     card_class = "bet-card compact" if compact else "bet-card"
 
     if rank_num is not None:
-        header_html = f"""
-<div class="rank-wrap">
-    <span class="rank-badge">#{rank_num}</span>
-    <div class="player-block">
-        <div class="player-name">{row['PLAYER']}</div>
-        <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
-    </div>
-</div>
-"""
+        header_html = (
+            f'<div class="rank-wrap">'
+            f'<span class="rank-badge">#{rank_num}</span>'
+            f'<div class="player-block">'
+            f'<div class="player-name">{row["PLAYER"]}</div>'
+            f'<div class="meta-line">{row["TEAM"]} vs {row["OPPONENT"]}</div>'
+            f'</div>'
+            f'</div>'
+        )
     else:
-        header_html = f"""
-<div class="player-block">
-    <div class="player-name">{row['PLAYER']}</div>
-    <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
-</div>
-"""
+        header_html = (
+            f'<div class="player-block">'
+            f'<div class="player-name">{row["PLAYER"]}</div>'
+            f'<div class="meta-line">{row["TEAM"]} vs {row["OPPONENT"]}</div>'
+            f'</div>'
+        )
 
-    card_html = f"""
-<div class="{card_class}">
-    <div class="card-top">
-        {header_html}
-        <div class="card-linebox">
-            <div class="line-label">Line</div>
-            <div class="line-value">{format_num(row['LINE'])}</div>
-        </div>
-    </div>
+    injury_note = row.get("INJURY_NOTE", "No major injury context")
 
-    <div class="pill-row">
-        <span class="pill pill-stat">{row['STAT']}</span>
-        <span class="pill {pill_class}">{row['LEAN']}</span>
-    </div>
+    card_html = (
+        f'<div class="{card_class}">'
+            f'<div class="card-top">'
+                f'{header_html}'
+                f'<div class="card-linebox">'
+                    f'<div class="line-label">Line</div>'
+                    f'<div class="line-value">{format_num(row["LINE"])}</div>'
+                f'</div>'
+            f'</div>'
 
-    <div class="metrics-grid metrics-grid-4">
-        <div class="metric-box-wrap">
-            <div class="metric-label">Projection</div>
-            <div class="metric-value">{format_num(row['PROJECTION'])}</div>
-        </div>
-        <div class="metric-box-wrap">
-            <div class="metric-label">L10 Avg</div>
-            <div class="metric-value">{format_num(row['L10_AVG'])}</div>
-        </div>
-        <div class="metric-box-wrap">
-            <div class="metric-label">L10 Hit Rate</div>
-            <div class="metric-value">{format_num(row['L10_HIT_RATE'], 0)}%</div>
-        </div>
-        <div class="metric-box-wrap">
-            <div class="metric-label">Season Hit Rate</div>
-            <div class="metric-value">{format_num(row['SEASON_HIT_RATE'], 0)}%</div>
-        </div>
-    </div>
+            f'<div class="pill-row">'
+                f'<span class="pill pill-stat">{row["STAT"]}</span>'
+                f'<span class="pill {pill_class}">{row["LEAN"]}</span>'
+            f'</div>'
 
-    <div class="metrics-grid metrics-grid-3">
-        <div class="metric-box-wrap">
-            <div class="metric-label">Hidden Gem</div>
-            <div class="metric-value metric-score">{int(round(row['CONFIDENCE'], 0))}%</div>
-        </div>
-        <div class="metric-box-wrap">
-            <div class="metric-label">DVP</div>
-            <div class="metric-value">{row['DVP_NOTE']}</div>
-        </div>
-        <div class="metric-box-wrap">
-            <div class="metric-label">Injury Context</div>
-            <div class="metric-value">{row.get('INJURY_NOTE', 'No major injury context')}</div>
-        </div>
-    </div>
-</div>
-"""
+            f'<div class="metrics-grid metrics-grid-4">'
+                f'<div class="metric-box-wrap">'
+                    f'<div class="metric-label">Projection</div>'
+                    f'<div class="metric-value">{format_num(row["PROJECTION"])}</div>'
+                f'</div>'
+                f'<div class="metric-box-wrap">'
+                    f'<div class="metric-label">L10 Avg</div>'
+                    f'<div class="metric-value">{format_num(row["L10_AVG"])}</div>'
+                f'</div>'
+                f'<div class="metric-box-wrap">'
+                    f'<div class="metric-label">L10 Hit Rate</div>'
+                    f'<div class="metric-value">{format_num(row["L10_HIT_RATE"], 0)}%</div>'
+                f'</div>'
+                f'<div class="metric-box-wrap">'
+                    f'<div class="metric-label">Season Hit Rate</div>'
+                    f'<div class="metric-value">{format_num(row["SEASON_HIT_RATE"], 0)}%</div>'
+                f'</div>'
+            f'</div>'
+
+            f'<div class="metrics-grid metrics-grid-3">'
+                f'<div class="metric-box-wrap">'
+                    f'<div class="metric-label">Hidden Gem</div>'
+                    f'<div class="metric-value metric-score">{int(round(row["CONFIDENCE"], 0))}%</div>'
+                f'</div>'
+                f'<div class="metric-box-wrap">'
+                    f'<div class="metric-label">DVP</div>'
+                    f'<div class="metric-value">{row["DVP_NOTE"]}</div>'
+                f'</div>'
+                f'<div class="metric-box-wrap">'
+                    f'<div class="metric-label">Injury Context</div>'
+                    f'<div class="metric-value">{injury_note}</div>'
+                f'</div>'
+            f'</div>'
+        f'</div>'
+    )
+
     st.markdown(card_html, unsafe_allow_html=True)
 
 
