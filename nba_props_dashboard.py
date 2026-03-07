@@ -198,14 +198,6 @@ st.markdown(
         line-height: 1.1;
     }
 
-    .metric-edge-pos {
-        color: #4ade80;
-    }
-
-    .metric-edge-neg {
-        color: #f87171;
-    }
-
     .metric-score {
         color: #60a5fa;
     }
@@ -621,8 +613,6 @@ def injury_adjustment(team_injuries, stat):
     doubtful_count = len(team_injuries.get("doubtful", []))
     probable_count = len(team_injuries.get("probable", []))
 
-    # positive: more opportunity
-    # negative: efficiency / role uncertainty / returning usage competition
     if stat == "PTS":
         volume_boost = (0.014 * out_count) + (0.008 * doubtful_count)
         efficiency_penalty = (0.006 * out_count) + (0.003 * doubtful_count)
@@ -633,7 +623,7 @@ def injury_adjustment(team_injuries, stat):
         efficiency_penalty = (0.010 * out_count) + (0.004 * doubtful_count)
         uncertainty_penalty = 0.004 * questionable_count
         returning_penalty = 0.008 * probable_count
-    else:  # REB
+    else:
         volume_boost = (0.012 * out_count) + (0.007 * doubtful_count)
         efficiency_penalty = (0.003 * out_count) + (0.002 * doubtful_count)
         uncertainty_penalty = 0.003 * questionable_count
@@ -697,6 +687,15 @@ def season_average(df: pd.DataFrame, stat: str):
     if vals.empty:
         return math.nan
     return round(vals.mean(), 2)
+
+
+def season_hit_rate(df: pd.DataFrame, stat: str, line: float):
+    if df.empty or stat not in df.columns:
+        return math.nan
+    vals = pd.to_numeric(df[stat], errors="coerce").dropna()
+    if vals.empty:
+        return math.nan
+    return round((vals > line).mean() * 100, 1)
 
 
 def minutes_average(df: pd.DataFrame, n: int):
@@ -1006,6 +1005,7 @@ def build_cheatsheet(props_df: pd.DataFrame, injury_map: dict):
 
         l5_hit = stat_hit_rate(log, stat, line, 5)
         l10_hit = stat_hit_rate(log, stat, line, 10)
+        season_hit = season_hit_rate(log, stat, line)
 
         l5_avg = stat_average(log, stat, 5)
         l10_avg = stat_average(log, stat, 10)
@@ -1053,6 +1053,7 @@ def build_cheatsheet(props_df: pd.DataFrame, injury_map: dict):
                 "BOOK_COUNT": book_count,
                 "L5_HIT_RATE": l5_hit,
                 "L10_HIT_RATE": l10_hit,
+                "SEASON_HIT_RATE": season_hit,
                 "L5_AVG": l5_avg,
                 "L10_AVG": l10_avg,
                 "SEASON_AVG": s_avg,
@@ -1112,8 +1113,6 @@ def render_bet_cards(df: pd.DataFrame, lean_type: str):
         return
 
     for _, row in subset.iterrows():
-        edge_class = "metric-edge-pos" if float(row["EDGE"]) > 0 else "metric-edge-neg"
-
         st.markdown(
             f"""
             <div class="bet-card">
@@ -1138,12 +1137,12 @@ def render_bet_cards(df: pd.DataFrame, lean_type: str):
                   <div class="metric-value">{format_num(row['PROJECTION'])}</div>
                 </div>
                 <div class="metric-box">
-                  <div class="metric-label">Last10 Avg</div>
+                  <div class="metric-label">L10 Avg</div>
                   <div class="metric-value">{format_num(row['L10_AVG'])}</div>
                 </div>
                 <div class="metric-box">
-                  <div class="metric-label">Edge</div>
-                  <div class="metric-value {edge_class}">{format_num(row['EDGE'])}</div>
+                  <div class="metric-label">L10 Hit Rate</div>
+                  <div class="metric-value">{format_num(row['L10_HIT_RATE'], 0)}%</div>
                 </div>
                 <div class="metric-box">
                   <div class="metric-label">Hidden Gem</div>
@@ -1166,7 +1165,7 @@ def render_full_cheatsheet_cards(df: pd.DataFrame):
         header = f"{row['PLAYER']} • {row['STAT']} • {lean_text}"
 
         with st.expander(header, expanded=(idx <= 5)):
-            top_cols = st.columns([2.2, 1, 1, 1, 1, 1, 1])
+            top_cols = st.columns([2.2, 1, 1, 1, 1, 1])
 
             with top_cols[0]:
                 st.markdown(
@@ -1195,18 +1194,10 @@ def render_full_cheatsheet_cards(df: pd.DataFrame):
                 st.markdown(f"**{format_num(row['PROJECTION'])}**")
 
             with top_cols[4]:
-                st.caption("Edge")
-                edge_color = "#4ade80" if row["EDGE"] > 0 else "#f87171" if row["EDGE"] < 0 else "#facc15"
-                st.markdown(
-                    f"<span style='color:{edge_color}; font-weight:800'>{format_num(row['EDGE'])}</span>",
-                    unsafe_allow_html=True,
-                )
+                st.caption("L10 Avg")
+                st.markdown(f"**{format_num(row['L10_AVG'])}**")
 
             with top_cols[5]:
-                st.caption("Hit% L10")
-                st.markdown(f"**{format_num(row['L10_HIT_RATE'], 0)}%**")
-
-            with top_cols[6]:
                 st.caption("Hidden Gem")
                 st.markdown(
                     f"<span style='color:#60a5fa; font-weight:800'>{int(round(row['CONFIDENCE'], 0))}%</span>",
@@ -1215,34 +1206,17 @@ def render_full_cheatsheet_cards(df: pd.DataFrame):
 
             detail_cols = st.columns(4)
             with detail_cols[0]:
-                st.caption("Last 5 Avg")
-                st.markdown(f"**{format_num(row['L5_AVG'])}**")
+                st.caption("L10 Hit Rate")
+                st.markdown(f"**{format_num(row['L10_HIT_RATE'], 0)}%**")
             with detail_cols[1]:
-                st.caption("Last 10 Avg")
-                st.markdown(f"**{format_num(row['L10_AVG'])}**")
+                st.caption("Season Hit Rate")
+                st.markdown(f"**{format_num(row['SEASON_HIT_RATE'], 0)}%**")
             with detail_cols[2]:
-                st.caption("Expected Min")
-                st.markdown(f"**{format_num(row['EXPECTED_MIN'])}**")
-            with detail_cols[3]:
-                st.caption("Min Stability")
-                st.markdown(f"**{format_num(row['MIN_STABILITY'], 0)}%**")
-
-            detail_cols2 = st.columns(4)
-            with detail_cols2[0]:
-                st.caption("Season Avg")
-                st.markdown(f"**{format_num(row['SEASON_AVG'])}**")
-            with detail_cols2[1]:
-                st.caption("Hit% L5")
-                st.markdown(f"**{format_num(row['L5_HIT_RATE'], 0)}%**")
-            with detail_cols2[2]:
-                st.caption("Volatility Penalty")
-                st.markdown(f"**{format_num(row['VOLATILITY_PENALTY'])}**")
-            with detail_cols2[3]:
                 st.caption("DVP")
                 st.markdown(f"**{row['DVP_NOTE']}**")
-
-            st.caption("Injury Context")
-            st.markdown(f"**{row.get('INJURY_NOTE', 'No major injury context')}**")
+            with detail_cols[3]:
+                st.caption("Injury Context")
+                st.markdown(f"**{row.get('INJURY_NOTE', 'No major injury context')}**")
 
 
 # =========================
