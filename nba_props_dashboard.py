@@ -249,10 +249,6 @@ st.markdown(
         grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
-    .metrics-grid-3 {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
     .metric-box-wrap {
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(148, 163, 184, 0.10);
@@ -357,10 +353,6 @@ st.markdown(
         .metrics-grid-4 {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
-
-        .metrics-grid-3 {
-            grid-template-columns: repeat(1, minmax(0, 1fr));
-        }
     }
     </style>
     """,
@@ -380,7 +372,7 @@ st.markdown(
 st.markdown(
     """
     <div class="hero-card">
-        <div class="hero-title">Research the Rina way</div>
+        <div class="hero-title">Ready to build today's board</div>
         <div class="hero-text">
             Pick your filters, add pregame injuries if needed, then click <b>Run Selected View</b>.
         </div>
@@ -1095,86 +1087,18 @@ def stat_volatility_penalty(log_df: pd.DataFrame, stat: str, n: int = 10):
     return round(penalty, 1)
 
 
+def ordinal_rank(n: int):
+    n = int(n)
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
 # =========================
-# DVP / MATCHUP HELPERS
+# TRUE DVP / MATCHUP HELPERS
 # =========================
-def opponent_team_id(team_abbr: str):
-    return TEAM_ABBR_TO_ID.get(team_abbr)
-
-
-def team_defense_rank_proxy(team_log_df: pd.DataFrame):
-    if team_log_df.empty:
-        return 15
-
-    sample = team_log_df.head(10).copy()
-    wins = (sample["WL"] == "W").sum() if "WL" in sample.columns else 5
-    win_pct = wins / max(len(sample), 1)
-
-    if win_pct <= 0.30:
-        return 26
-    if win_pct <= 0.40:
-        return 22
-    if win_pct <= 0.50:
-        return 18
-    if win_pct <= 0.60:
-        return 14
-    if win_pct <= 0.70:
-        return 10
-    return 6
-
-
-def dvp_multiplier_from_rank(rank_proxy: float):
-    if pd.isna(rank_proxy):
-        return 1.00, "Neutral matchup"
-    if rank_proxy >= 26:
-        return 1.07, "Elite matchup"
-    if rank_proxy >= 21:
-        return 1.04, "Strong matchup"
-    if rank_proxy >= 16:
-        return 1.01, "Slightly favorable matchup"
-    if rank_proxy >= 11:
-        return 0.99, "Slightly difficult matchup"
-    if rank_proxy >= 6:
-        return 0.96, "Tough matchup"
-    return 0.93, "Very tough matchup"
-
-
-def dvp_bonus_from_rank(rank_proxy: float):
-    if pd.isna(rank_proxy):
-        return 0.0
-    if rank_proxy >= 26:
-        return 5.0
-    if rank_proxy >= 21:
-        return 3.0
-    if rank_proxy >= 16:
-        return 1.0
-    if rank_proxy >= 11:
-        return -1.0
-    if rank_proxy >= 6:
-        return -3.0
-    return -5.0
-
-
-def opponent_dvp_context(opponent_abbr: str):
-    if not opponent_abbr:
-        return math.nan, 1.00, 0.0, "Neutral matchup"
-
-    opp_id = opponent_team_id(opponent_abbr)
-    if not opp_id:
-        return math.nan, 1.00, 0.0, "Neutral matchup"
-
-    try:
-        team_log = get_team_game_log(opp_id)
-    except Exception:
-        return math.nan, 1.00, 0.0, "Neutral matchup"
-
-    rank_proxy = team_defense_rank_proxy(team_log)
-    mult, note = dvp_multiplier_from_rank(rank_proxy)
-    bonus = dvp_bonus_from_rank(rank_proxy)
-
-    return rank_proxy, mult, bonus, note
-
-
 def get_team_pace(team_abbr: str, team_adv_df: pd.DataFrame):
     if team_adv_df.empty or not team_abbr or "TEAM_ABBR" not in team_adv_df.columns:
         return math.nan
@@ -1242,18 +1166,71 @@ def usage_multiplier(player_id: int, stat: str, player_adv_df: pd.DataFrame):
     return round(mult, 4), round(float(usg), 2)
 
 
+def get_true_dvp_rank(opponent_abbr: str, stat: str, team_allowed_df: pd.DataFrame):
+    if team_allowed_df.empty or not opponent_abbr or "TEAM_ABBREVIATION" not in team_allowed_df.columns:
+        return math.nan
+
+    if stat == "PTS":
+        col = "PTS_ALLOWED"
+    elif stat == "REB":
+        col = "REB_ALLOWED"
+    else:
+        col = "AST_ALLOWED"
+
+    if col not in team_allowed_df.columns:
+        return math.nan
+
+    temp = team_allowed_df[["TEAM_ABBREVIATION", col]].copy()
+    temp[col] = pd.to_numeric(temp[col], errors="coerce")
+    temp = temp.dropna(subset=[col])
+
+    if temp.empty:
+        return math.nan
+
+    # 1 = toughest (fewest allowed), 30 = easiest (most allowed)
+    temp["DVP_RANK"] = temp[col].rank(method="min", ascending=True)
+
+    row = temp[temp["TEAM_ABBREVIATION"] == opponent_abbr]
+    if row.empty:
+        return math.nan
+
+    return float(row.iloc[0]["DVP_RANK"])
+
+
+def dvp_bonus_from_true_rank(rank_val: float):
+    if pd.isna(rank_val):
+        return 0.0
+    if rank_val >= 26:
+        return 5.0
+    if rank_val >= 21:
+        return 3.0
+    if rank_val >= 16:
+        return 1.0
+    if rank_val >= 11:
+        return -1.0
+    if rank_val >= 6:
+        return -3.0
+    return -5.0
+
+
+def true_dvp_context(opponent_abbr: str, stat: str, team_allowed_df: pd.DataFrame):
+    rank_val = get_true_dvp_rank(opponent_abbr, stat, team_allowed_df)
+    if pd.isna(rank_val):
+        return math.nan, 0.0, "Neutral DVP"
+
+    bonus = dvp_bonus_from_true_rank(rank_val)
+    note = f"{ordinal_rank(int(round(rank_val, 0)))} vs {stat}"
+    return rank_val, bonus, note
+
+
 def opponent_allowance_multiplier(opponent_abbr: str, stat: str, team_allowed_df: pd.DataFrame):
     if team_allowed_df.empty or not opponent_abbr:
         return 1.00, math.nan, "Neutral opponent stat environment"
 
-    if "TEAM_ABBREVIATION" in team_allowed_df.columns:
-        lookup_col = "TEAM_ABBREVIATION"
-    elif "TEAM_ID" in team_allowed_df.columns:
-        return 1.00, math.nan, "Neutral opponent stat environment"
-    else:
+    if "TEAM_ABBREVIATION" not in team_allowed_df.columns:
         return 1.00, math.nan, "Neutral opponent stat environment"
 
-    row = team_allowed_df[team_allowed_df[lookup_col] == opponent_abbr]
+    row = team_allowed_df[team_allowed_df["TEAM_ABBREVIATION"] == opponent_abbr]
     if row.empty:
         return 1.00, math.nan, "Neutral opponent stat environment"
 
@@ -1430,17 +1407,20 @@ def build_cheatsheet(props_df: pd.DataFrame, injury_map: dict):
         min_stability = minutes_stability_score(log, 10)
         volatility_pen = stat_volatility_penalty(log, stat, 10)
 
-        dvp_rank, dvp_mult, dvp_bonus, dvp_note = opponent_dvp_context(opponent)
         proj_mult, gem_adj, injury_note = injury_adjustment(team_injuries, stat)
 
         pace_mult, team_pace, opp_pace = pace_multiplier(team, opponent, team_adv_df)
         usg_mult, usg_pct = usage_multiplier(player_id, stat, player_adv_df)
+
+        dvp_rank, dvp_bonus, dvp_note = true_dvp_context(opponent, stat, team_allowed_df)
         opp_allow_mult, opp_allow_val, opp_allow_note = opponent_allowance_multiplier(
             opponent, stat, team_allowed_df
         )
 
+        # True DVP rank is now used for ranking/context.
+        # Projection uses the actual opponent-allowance multiplier to avoid double-counting matchup.
         projection = (
-            round(base_projection * dvp_mult * proj_mult * pace_mult * usg_mult * opp_allow_mult, 2)
+            round(base_projection * proj_mult * pace_mult * usg_mult * opp_allow_mult, 2)
             if not pd.isna(base_projection)
             else math.nan
         )
@@ -1549,6 +1529,15 @@ def render_single_card(row, rank_num=None, compact=False):
 
     injury_note = row.get("INJURY_NOTE", "No major injury context")
 
+    dvp_rank = row.get("DVP_RANK", math.nan)
+    if pd.isna(dvp_rank):
+        dvp_display = "Neutral"
+    else:
+        dvp_display = f'{ordinal_rank(int(round(float(dvp_rank), 0)))} vs {row["STAT"]}'
+
+    usg_pct = row.get("USG_PCT", math.nan)
+    usg_display = "-" if pd.isna(usg_pct) else f'{float(usg_pct):.1f}%'
+
     card_html = (
         f'<div class="{card_class}">'
             f'<div class="card-top">'
@@ -1583,14 +1572,18 @@ def render_single_card(row, rank_num=None, compact=False):
                 f'</div>'
             f'</div>'
 
-            f'<div class="metrics-grid metrics-grid-3">'
+            f'<div class="metrics-grid metrics-grid-4">'
                 f'<div class="metric-box-wrap">'
                     f'<div class="metric-label">Hidden Gem</div>'
                     f'<div class="metric-value metric-score">{int(round(row["CONFIDENCE"], 0))}%</div>'
                 f'</div>'
                 f'<div class="metric-box-wrap">'
-                    f'<div class="metric-label">DVP</div>'
-                    f'<div class="metric-value">{row["DVP_NOTE"]}</div>'
+                    f'<div class="metric-label">USG %</div>'
+                    f'<div class="metric-value">{usg_display}</div>'
+                f'</div>'
+                f'<div class="metric-box-wrap">'
+                    f'<div class="metric-label">DVP Rank</div>'
+                    f'<div class="metric-value">{dvp_display}</div>'
                 f'</div>'
                 f'<div class="metric-box-wrap">'
                     f'<div class="metric-label">Injury Context</div>'
@@ -1817,4 +1810,3 @@ if run_model:
 
 else:
     pass
-
