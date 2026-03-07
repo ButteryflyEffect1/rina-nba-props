@@ -91,7 +91,8 @@ st.markdown(
         border-radius: 16px;
         padding: 12px 14px;
         box-shadow: 0 8px 20px rgba(0, 0, 0, 0.20);
-        margin-bottom: 10px;
+        margin-bottom: 12px;
+        height: 100%;
     }
 
     .bet-top {
@@ -150,6 +151,12 @@ st.markdown(
         border-color: rgba(239, 68, 68, 0.28);
     }
 
+    .pill-pass {
+        background: rgba(250, 204, 21, 0.12);
+        color: #fde68a;
+        border-color: rgba(250, 204, 21, 0.24);
+    }
+
     .card-linebox {
         text-align: right;
         min-width: 80px;
@@ -182,6 +189,7 @@ st.markdown(
         border: 1px solid rgba(148, 163, 184, 0.10);
         border-radius: 12px;
         padding: 8px 10px;
+        min-height: 64px;
     }
 
     .metric-label {
@@ -195,7 +203,8 @@ st.markdown(
         color: #f8fafc;
         font-size: 0.98rem;
         font-weight: 800;
-        line-height: 1.1;
+        line-height: 1.2;
+        word-break: break-word;
     }
 
     .metric-score {
@@ -225,9 +234,15 @@ st.markdown(
         display: none;
     }
 
-    @media (max-width: 900px) {
+    @media (max-width: 1100px) {
         .metrics-grid {
             grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 700px) {
+        .metrics-grid {
+            grid-template-columns: 1fr;
         }
     }
     </style>
@@ -1160,63 +1175,85 @@ def render_full_cheatsheet_cards(df: pd.DataFrame):
         st.info("No rows to display.")
         return
 
-    for idx, (_, row) in enumerate(df.head(50).iterrows(), start=1):
-        lean_text = "🟢 OVER" if row["LEAN"] == "OVER" else "🔴 UNDER" if row["LEAN"] == "UNDER" else "🟡 PASS"
-        header = f"{row['PLAYER']} • {row['STAT']} • {lean_text}"
+    ranked_df = df.head(50).copy()
 
-        with st.expander(header, expanded=(idx <= 5)):
-            top_cols = st.columns([2.2, 1, 1, 1, 1, 1])
+    for i in range(0, len(ranked_df), 2):
+        cols = st.columns(2)
 
-            with top_cols[0]:
+        for col_idx, row_idx in enumerate([i, i + 1]):
+            if row_idx >= len(ranked_df):
+                continue
+
+            row = ranked_df.iloc[row_idx]
+            rank_num = row_idx + 1
+
+            if row["LEAN"] == "OVER":
+                pill_class = "pill-over"
+            elif row["LEAN"] == "UNDER":
+                pill_class = "pill-under"
+            else:
+                pill_class = "pill-pass"
+
+            with cols[col_idx]:
                 st.markdown(
                     f"""
-                    <div class="row-head">
-                        <span class="rank-badge">#{idx}</span>
+                    <div class="bet-card">
+                      <div class="bet-top">
                         <div>
-                            <div class="player-name">{row['PLAYER']}</div>
-                            <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
+                          <div class="row-head">
+                            <span class="rank-badge">#{rank_num}</span>
+                            <div>
+                              <div class="player-name">{row['PLAYER']}</div>
+                              <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
+                            </div>
+                          </div>
+
+                          <div class="pill-row" style="margin-top:8px;">
+                            <span class="pill pill-stat">{row['STAT']}</span>
+                            <span class="pill {pill_class}">{row['LEAN']}</span>
+                          </div>
                         </div>
+
+                        <div class="card-linebox">
+                          <div class="line-label">Line</div>
+                          <div class="line-value">{format_num(row['LINE'])}</div>
+                        </div>
+                      </div>
+
+                      <div class="metrics-grid">
+                        <div class="metric-box">
+                          <div class="metric-label">Projection</div>
+                          <div class="metric-value">{format_num(row['PROJECTION'])}</div>
+                        </div>
+                        <div class="metric-box">
+                          <div class="metric-label">L10 Avg</div>
+                          <div class="metric-value">{format_num(row['L10_AVG'])}</div>
+                        </div>
+                        <div class="metric-box">
+                          <div class="metric-label">L10 Hit Rate</div>
+                          <div class="metric-value">{format_num(row['L10_HIT_RATE'], 0)}%</div>
+                        </div>
+                        <div class="metric-box">
+                          <div class="metric-label">Season Hit Rate</div>
+                          <div class="metric-value">{format_num(row['SEASON_HIT_RATE'], 0)}%</div>
+                        </div>
+                        <div class="metric-box">
+                          <div class="metric-label">Hidden Gem</div>
+                          <div class="metric-value metric-score">{int(round(row['CONFIDENCE'], 0))}%</div>
+                        </div>
+                        <div class="metric-box">
+                          <div class="metric-label">DVP</div>
+                          <div class="metric-value">{row['DVP_NOTE']}</div>
+                        </div>
+                        <div class="metric-box">
+                          <div class="metric-label">Injury Context</div>
+                          <div class="metric-value">{row.get('INJURY_NOTE', 'No major injury context')}</div>
+                        </div>
+                      </div>
                     </div>
                     """,
                     unsafe_allow_html=True,
                 )
-
-            with top_cols[1]:
-                st.caption("Prop")
-                st.markdown(f"**{row['STAT']}**")
-
-            with top_cols[2]:
-                st.caption("Line")
-                st.markdown(f"**{format_num(row['LINE'])}**")
-
-            with top_cols[3]:
-                st.caption("Projection")
-                st.markdown(f"**{format_num(row['PROJECTION'])}**")
-
-            with top_cols[4]:
-                st.caption("L10 Avg")
-                st.markdown(f"**{format_num(row['L10_AVG'])}**")
-
-            with top_cols[5]:
-                st.caption("Hidden Gem")
-                st.markdown(
-                    f"<span style='color:#60a5fa; font-weight:800'>{int(round(row['CONFIDENCE'], 0))}%</span>",
-                    unsafe_allow_html=True,
-                )
-
-            detail_cols = st.columns(4)
-            with detail_cols[0]:
-                st.caption("L10 Hit Rate")
-                st.markdown(f"**{format_num(row['L10_HIT_RATE'], 0)}%**")
-            with detail_cols[1]:
-                st.caption("Season Hit Rate")
-                st.markdown(f"**{format_num(row['SEASON_HIT_RATE'], 0)}%**")
-            with detail_cols[2]:
-                st.caption("DVP")
-                st.markdown(f"**{row['DVP_NOTE']}**")
-            with detail_cols[3]:
-                st.caption("Injury Context")
-                st.markdown(f"**{row.get('INJURY_NOTE', 'No major injury context')}**")
 
 
 # =========================
