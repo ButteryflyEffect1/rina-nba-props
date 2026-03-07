@@ -41,54 +41,53 @@ st.markdown(
     }
 
     .block-container {
-        padding-top: 2.2rem;
+        padding-top: 1.8rem;
         padding-bottom: 2rem;
-        max-width: 1500px;
+        max-width: 1480px;
     }
 
     .title-wrap {
-        margin-bottom: 0.8rem;
+        margin-bottom: 0.6rem;
     }
 
     .app-title {
-        font-size: 3rem;
+        font-size: 2.8rem;
         font-weight: 800;
         color: #f8fafc;
-        margin-bottom: 0.15rem;
-        line-height: 1.05;
+        margin-bottom: 0.1rem;
+        line-height: 1.02;
     }
 
     .app-subtitle {
         color: #94a3b8;
-        font-size: 0.98rem;
+        font-size: 0.95rem;
         margin-top: 0;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.35rem;
     }
 
     .section-title {
-        font-size: 1.85rem;
+        font-size: 1.9rem;
         font-weight: 800;
-        margin: 1rem 0 0.8rem 0;
+        margin: 0.9rem 0 0.7rem 0;
         color: #f8fafc;
     }
 
     .control-card {
         background: linear-gradient(180deg, rgba(18, 25, 41, 0.96), rgba(13, 19, 32, 0.96));
         border: 1px solid rgba(148, 163, 184, 0.16);
-        border-radius: 18px;
-        padding: 18px 18px 14px 18px;
+        border-radius: 16px;
+        padding: 14px 14px 10px 14px;
         box-shadow: 0 8px 20px rgba(0, 0, 0, 0.20);
-        margin-bottom: 1rem;
+        margin-bottom: 0.9rem;
     }
 
     .bet-card {
         background: linear-gradient(180deg, rgba(18, 25, 41, 0.96), rgba(13, 19, 32, 0.96));
         border: 1px solid rgba(148, 163, 184, 0.16);
-        border-radius: 16px;
-        padding: 14px 14px 12px 14px;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.20);
-        margin-bottom: 12px;
-        height: 100%;
+        border-radius: 15px;
+        padding: 10px 11px 10px 11px;
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+        margin-bottom: 10px;
     }
 
     .bet-top {
@@ -96,25 +95,25 @@ st.markdown(
         justify-content: space-between;
         align-items: flex-start;
         gap: 10px;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
     }
 
     .player-name {
-        font-size: 1.02rem;
+        font-size: 0.98rem;
         font-weight: 800;
         color: #f8fafc;
-        margin-bottom: 2px;
-        line-height: 1.15;
+        margin-bottom: 1px;
+        line-height: 1.12;
     }
 
     .meta-line {
-        font-size: 0.84rem;
+        font-size: 0.8rem;
         color: #94a3b8;
     }
 
     .pill-row {
         display: flex;
-        gap: 7px;
+        gap: 6px;
         flex-wrap: wrap;
         margin-top: 6px;
     }
@@ -123,8 +122,8 @@ st.markdown(
         display: inline-flex;
         align-items: center;
         border-radius: 999px;
-        padding: 4px 9px;
-        font-size: 0.72rem;
+        padding: 3px 8px;
+        font-size: 0.68rem;
         font-weight: 700;
         border: 1px solid transparent;
     }
@@ -155,51 +154,64 @@ st.markdown(
 
     .card-linebox {
         text-align: right;
-        min-width: 80px;
+        min-width: 68px;
     }
 
     .line-label {
         color: #94a3b8;
-        font-size: 0.68rem;
+        font-size: 0.64rem;
         text-transform: uppercase;
         letter-spacing: 0.07em;
     }
 
     .line-value {
         color: #f8fafc;
-        font-size: 1.15rem;
+        font-size: 1.08rem;
         font-weight: 800;
-        line-height: 1.1;
-        margin-top: 2px;
+        line-height: 1.05;
+        margin-top: 1px;
     }
 
-    .metrics-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 8px;
-        margin-top: 8px;
+    .rank-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.06);
+        color: #f8fafc;
+        font-size: 0.72rem;
+        font-weight: 800;
+        margin-right: 8px;
+        margin-top: 1px;
     }
 
-    .metric-box {
+    .row-head {
+        display: flex;
+        align-items: flex-start;
+    }
+
+    .metric-box-wrap {
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(148, 163, 184, 0.10);
-        border-radius: 12px;
-        padding: 8px 10px;
-        min-height: 64px;
+        border-radius: 11px;
+        padding: 7px 9px;
+        min-height: 56px;
     }
 
     .metric-label {
         color: #94a3b8;
-        font-size: 0.68rem;
-        margin-bottom: 3px;
+        font-size: 0.66rem;
+        margin-bottom: 2px;
         line-height: 1.1;
     }
 
     .metric-value {
         color: #f8fafc;
-        font-size: 0.98rem;
+        font-size: 0.95rem;
         font-weight: 800;
-        line-height: 1.2;
+        line-height: 1.15;
         word-break: break-word;
     }
 
@@ -207,38 +219,17 @@ st.markdown(
         color: #60a5fa;
     }
 
-    .rank-badge {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 26px;
-        height: 26px;
-        border-radius: 999px;
-        background: rgba(255,255,255,0.06);
-        color: #f8fafc;
-        font-size: 0.74rem;
-        font-weight: 800;
-        margin-right: 8px;
-    }
-
-    .row-head {
-        display: flex;
-        align-items: center;
-    }
-
     [data-testid="collapsedControl"] {
         display: none;
     }
 
-    @media (max-width: 1100px) {
-        .metrics-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
+    div[data-testid="stVerticalBlock"] > div:has(> div > div > div.metric-box-wrap) {
+        gap: 0.45rem;
     }
 
-    @media (max-width: 700px) {
-        .metrics-grid {
-            grid-template-columns: 1fr;
+    @media (max-width: 950px) {
+        .app-title {
+            font-size: 2.3rem;
         }
     }
     </style>
@@ -1111,69 +1102,76 @@ def lean_pill_class(lean: str):
     return "pill-pass"
 
 
-def render_single_card(row, rank_num=None):
-    pill_class = lean_pill_class(row["LEAN"])
-    rank_html = f'<span class="rank-badge">#{rank_num}</span>' if rank_num is not None else ""
-
+def render_metric_box(label: str, value: str, score: bool = False):
+    extra_class = " metric-score" if score else ""
     st.markdown(
         f"""
-        <div class="bet-card">
-          <div class="bet-top">
-            <div>
-              <div class="row-head">
-                {rank_html}
-                <div>
-                  <div class="player-name">{row['PLAYER']}</div>
-                  <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
-                </div>
-              </div>
-
-              <div class="pill-row">
-                <span class="pill pill-stat">{row['STAT']}</span>
-                <span class="pill {pill_class}">{row['LEAN']}</span>
-              </div>
-            </div>
-
-            <div class="card-linebox">
-              <div class="line-label">Line</div>
-              <div class="line-value">{format_num(row['LINE'])}</div>
-            </div>
-          </div>
-
-          <div class="metrics-grid">
-            <div class="metric-box">
-              <div class="metric-label">Projection</div>
-              <div class="metric-value">{format_num(row['PROJECTION'])}</div>
-            </div>
-            <div class="metric-box">
-              <div class="metric-label">L10 Avg</div>
-              <div class="metric-value">{format_num(row['L10_AVG'])}</div>
-            </div>
-            <div class="metric-box">
-              <div class="metric-label">L10 Hit Rate</div>
-              <div class="metric-value">{format_num(row['L10_HIT_RATE'], 0)}%</div>
-            </div>
-            <div class="metric-box">
-              <div class="metric-label">Season Hit Rate</div>
-              <div class="metric-value">{format_num(row['SEASON_HIT_RATE'], 0)}%</div>
-            </div>
-            <div class="metric-box">
-              <div class="metric-label">Hidden Gem</div>
-              <div class="metric-value metric-score">{int(round(row['CONFIDENCE'], 0))}%</div>
-            </div>
-            <div class="metric-box">
-              <div class="metric-label">DVP</div>
-              <div class="metric-value">{row['DVP_NOTE']}</div>
-            </div>
-            <div class="metric-box">
-              <div class="metric-label">Injury Context</div>
-              <div class="metric-value">{row.get('INJURY_NOTE', 'No major injury context')}</div>
-            </div>
-          </div>
+        <div class="metric-box-wrap">
+            <div class="metric-label">{label}</div>
+            <div class="metric-value{extra_class}">{value}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+
+def render_single_card(row, rank_num=None):
+    pill_class = lean_pill_class(row["LEAN"])
+
+    with st.container():
+        st.markdown('<div class="bet-card">', unsafe_allow_html=True)
+
+        top_left, top_right = st.columns([5, 1])
+
+        with top_left:
+            rank_html = f"<span class='rank-badge'>#{rank_num}</span>" if rank_num is not None else ""
+            st.markdown(
+                f"""
+                <div class="row-head">
+                    {rank_html}
+                    <div>
+                        <div class="player-name">{row['PLAYER']}</div>
+                        <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
+                    </div>
+                </div>
+                <div class="pill-row">
+                    <span class="pill pill-stat">{row['STAT']}</span>
+                    <span class="pill {pill_class}">{row['LEAN']}</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        with top_right:
+            st.markdown(
+                f"""
+                <div class="card-linebox">
+                    <div class="line-label">Line</div>
+                    <div class="line-value">{format_num(row['LINE'])}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        metric_cols_1 = st.columns(4)
+        with metric_cols_1[0]:
+            render_metric_box("Projection", format_num(row["PROJECTION"]))
+        with metric_cols_1[1]:
+            render_metric_box("L10 Avg", format_num(row["L10_AVG"]))
+        with metric_cols_1[2]:
+            render_metric_box("L10 Hit Rate", f"{format_num(row['L10_HIT_RATE'], 0)}%")
+        with metric_cols_1[3]:
+            render_metric_box("Season Hit Rate", f"{format_num(row['SEASON_HIT_RATE'], 0)}%")
+
+        metric_cols_2 = st.columns(3)
+        with metric_cols_2[0]:
+            render_metric_box("Hidden Gem", f"{int(round(row['CONFIDENCE'], 0))}%", score=True)
+        with metric_cols_2[1]:
+            render_metric_box("DVP", row["DVP_NOTE"])
+        with metric_cols_2[2]:
+            render_metric_box("Injury Context", row.get("INJURY_NOTE", "No major injury context"))
+
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
 def render_bet_cards(df: pd.DataFrame, lean_type: str):
