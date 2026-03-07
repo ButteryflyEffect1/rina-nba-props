@@ -36,79 +36,101 @@ st.markdown(
     """
     <style>
     .stApp {
-        background: linear-gradient(180deg, #060b16 0%, #08101d 100%);
+        background: radial-gradient(circle at top, #0b1220 0%, #07101b 45%, #050a14 100%);
         color: #f8fafc;
     }
 
     .block-container {
-        padding-top: 1.8rem;
-        padding-bottom: 2rem;
-        max-width: 1480px;
+        padding-top: 1.4rem;
+        padding-bottom: 2.2rem;
+        max-width: 1360px;
     }
 
     .title-wrap {
-        margin-bottom: 0.6rem;
+        margin-bottom: 1.1rem;
     }
 
     .app-title {
-        font-size: 2.8rem;
+        font-size: 2.65rem;
         font-weight: 800;
         color: #f8fafc;
-        margin-bottom: 0.1rem;
-        line-height: 1.02;
+        margin-bottom: 0.15rem;
+        line-height: 1.0;
+        letter-spacing: -0.02em;
     }
 
     .app-subtitle {
         color: #94a3b8;
         font-size: 0.95rem;
         margin-top: 0;
-        margin-bottom: 0.35rem;
+        margin-bottom: 0;
     }
 
     .section-title {
-        font-size: 1.9rem;
+        font-size: 1.75rem;
         font-weight: 800;
-        margin: 0.9rem 0 0.7rem 0;
+        margin: 1.1rem 0 0.8rem 0;
         color: #f8fafc;
+        letter-spacing: -0.01em;
     }
 
     .control-card {
-        background: linear-gradient(180deg, rgba(18, 25, 41, 0.96), rgba(13, 19, 32, 0.96));
-        border: 1px solid rgba(148, 163, 184, 0.16);
-        border-radius: 16px;
-        padding: 14px 14px 10px 14px;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.20);
-        margin-bottom: 0.9rem;
+        background: linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(12, 18, 31, 0.96));
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 18px;
+        padding: 14px 14px 8px 14px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+        margin-bottom: 1rem;
     }
 
     .bet-card {
-        background: linear-gradient(180deg, rgba(18, 25, 41, 0.96), rgba(13, 19, 32, 0.96));
-        border: 1px solid rgba(148, 163, 184, 0.16);
-        border-radius: 15px;
-        padding: 10px 11px 10px 11px;
-        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+        background: linear-gradient(180deg, rgba(17, 24, 39, 0.97), rgba(12, 18, 31, 0.97));
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 16px;
+        padding: 12px 12px 10px 12px;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+        margin-bottom: 12px;
+    }
+
+    .bet-card.compact {
+        padding: 10px 11px 9px 11px;
         margin-bottom: 10px;
     }
 
+    .card-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 4px;
+    }
+
+    .player-block {
+        min-width: 0;
+        flex: 1;
+    }
+
     .player-name {
-        font-size: 0.98rem;
+        font-size: 1.02rem;
         font-weight: 800;
         color: #f8fafc;
-        margin-bottom: 1px;
-        line-height: 1.12;
+        margin-bottom: 2px;
+        line-height: 1.1;
+        word-break: break-word;
     }
 
     .meta-line {
-        font-size: 0.8rem;
+        font-size: 0.78rem;
         color: #94a3b8;
+        line-height: 1.2;
     }
 
     .pill-row {
         display: flex;
         gap: 6px;
         flex-wrap: wrap;
-        margin-top: 6px;
-        margin-bottom: 8px;
+        margin-top: 8px;
+        margin-bottom: 10px;
     }
 
     .pill {
@@ -116,27 +138,28 @@ st.markdown(
         align-items: center;
         border-radius: 999px;
         padding: 3px 8px;
-        font-size: 0.68rem;
-        font-weight: 700;
+        font-size: 0.66rem;
+        font-weight: 800;
         border: 1px solid transparent;
+        letter-spacing: 0.01em;
     }
 
     .pill-stat {
         background: rgba(59, 130, 246, 0.14);
         color: #93c5fd;
-        border-color: rgba(59, 130, 246, 0.25);
+        border-color: rgba(59, 130, 246, 0.24);
     }
 
     .pill-over {
         background: rgba(34, 197, 94, 0.16);
         color: #86efac;
-        border-color: rgba(34, 197, 94, 0.28);
+        border-color: rgba(34, 197, 94, 0.30);
     }
 
     .pill-under {
         background: rgba(239, 68, 68, 0.16);
         color: #fca5a5;
-        border-color: rgba(239, 68, 68, 0.28);
+        border-color: rgba(239, 68, 68, 0.30);
     }
 
     .pill-pass {
@@ -146,23 +169,25 @@ st.markdown(
     }
 
     .card-linebox {
+        min-width: 62px;
         text-align: right;
-        min-width: 68px;
+        flex-shrink: 0;
+        padding-top: 1px;
     }
 
     .line-label {
         color: #94a3b8;
-        font-size: 0.64rem;
+        font-size: 0.60rem;
         text-transform: uppercase;
-        letter-spacing: 0.07em;
+        letter-spacing: 0.08em;
+        margin-bottom: 2px;
     }
 
     .line-value {
         color: #f8fafc;
         font-size: 1.08rem;
         font-weight: 800;
-        line-height: 1.05;
-        margin-top: 1px;
+        line-height: 1;
     }
 
     .rank-badge {
@@ -172,37 +197,39 @@ st.markdown(
         min-width: 24px;
         height: 24px;
         border-radius: 999px;
-        background: rgba(255,255,255,0.06);
+        background: linear-gradient(180deg, rgba(96, 165, 250, 0.20), rgba(59, 130, 246, 0.10));
         color: #f8fafc;
         font-size: 0.72rem;
         font-weight: 800;
         margin-right: 8px;
-        margin-top: 1px;
+        flex-shrink: 0;
     }
 
-    .row-head {
+    .rank-wrap {
         display: flex;
         align-items: flex-start;
+        gap: 0;
     }
 
     .metric-box-wrap {
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(148, 163, 184, 0.10);
-        border-radius: 11px;
-        padding: 7px 9px;
-        min-height: 56px;
+        border-radius: 12px;
+        padding: 8px 9px;
+        min-height: 58px;
     }
 
     .metric-label {
         color: #94a3b8;
-        font-size: 0.66rem;
-        margin-bottom: 2px;
+        font-size: 0.64rem;
+        margin-bottom: 3px;
         line-height: 1.1;
+        text-transform: none;
     }
 
     .metric-value {
         color: #f8fafc;
-        font-size: 0.95rem;
+        font-size: 0.93rem;
         font-weight: 800;
         line-height: 1.15;
         word-break: break-word;
@@ -212,13 +239,49 @@ st.markdown(
         color: #60a5fa;
     }
 
+    .divider-space {
+        height: 2px;
+    }
+
     [data-testid="collapsedControl"] {
         display: none;
     }
 
-    @media (max-width: 950px) {
+    div[data-testid="stDownloadButton"] > button {
+        border-radius: 12px;
+        font-weight: 700;
+    }
+
+    @media (max-width: 1100px) {
         .app-title {
             font-size: 2.3rem;
+        }
+
+        .section-title {
+            font-size: 1.55rem;
+        }
+    }
+
+    @media (max-width: 760px) {
+        .block-container {
+            padding-top: 1rem;
+        }
+
+        .app-title {
+            font-size: 2.0rem;
+        }
+
+        .bet-card,
+        .bet-card.compact {
+            padding: 10px 10px 9px 10px;
+        }
+
+        .player-name {
+            font-size: 0.96rem;
+        }
+
+        .line-value {
+            font-size: 1rem;
         }
     }
     </style>
@@ -1104,79 +1167,65 @@ def render_metric_box(label: str, value: str, score: bool = False):
     )
 
 
-def render_single_card(row, rank_num=None):
+def render_single_card(row, rank_num=None, compact=False):
     pill_class = lean_pill_class(row["LEAN"])
+    card_class = "bet-card compact" if compact else "bet-card"
 
-    with st.container():
-        top_left, top_right = st.columns([5, 1])
+    if rank_num is not None:
+        player_html = f"""
+        <div class="rank-wrap">
+            <span class="rank-badge">#{rank_num}</span>
+            <div class="player-block">
+                <div class="player-name">{row['PLAYER']}</div>
+                <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
+            </div>
+        </div>
+        """
+    else:
+        player_html = f"""
+        <div class="player-block">
+            <div class="player-name">{row['PLAYER']}</div>
+            <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
+        </div>
+        """
 
-        with top_left:
-            if rank_num is not None:
-                st.markdown(
-                    f"""
-                    <div class="bet-card">
-                        <div class="row-head">
-                            <span class="rank-badge">#{rank_num}</span>
-                            <div>
-                                <div class="player-name">{row['PLAYER']}</div>
-                                <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
-                            </div>
-                        </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.markdown(
-                    f"""
-                    <div class="bet-card">
-                        <div class="player-name">{row['PLAYER']}</div>
-                        <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-            st.markdown(
-                f"""
-                <div class="pill-row">
-                    <span class="pill pill-stat">{row['STAT']}</span>
-                    <span class="pill {pill_class}">{row['LEAN']}</span>
+    st.markdown(
+        f"""
+        <div class="{card_class}">
+            <div class="card-top">
+                {player_html}
+                <div class="card-linebox">
+                    <div class="line-label">Line</div>
+                    <div class="line-value">{format_num(row['LINE'])}</div>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            </div>
 
-        with top_right:
-            st.markdown(
-                f"""
-                <div style="padding-top:2px;">
-                    <div class="card-linebox">
-                        <div class="line-label">Line</div>
-                        <div class="line-value">{format_num(row['LINE'])}</div>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            <div class="pill-row">
+                <span class="pill pill-stat">{row['STAT']}</span>
+                <span class="pill {pill_class}">{row['LEAN']}</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-        metric_cols_1 = st.columns(4)
-        with metric_cols_1[0]:
-            render_metric_box("Projection", format_num(row["PROJECTION"]))
-        with metric_cols_1[1]:
-            render_metric_box("L10 Avg", format_num(row["L10_AVG"]))
-        with metric_cols_1[2]:
-            render_metric_box("L10 Hit Rate", f"{format_num(row['L10_HIT_RATE'], 0)}%")
-        with metric_cols_1[3]:
-            render_metric_box("Season Hit Rate", f"{format_num(row['SEASON_HIT_RATE'], 0)}%")
+    metric_cols_1 = st.columns(4)
+    with metric_cols_1[0]:
+        render_metric_box("Projection", format_num(row["PROJECTION"]))
+    with metric_cols_1[1]:
+        render_metric_box("L10 Avg", format_num(row["L10_AVG"]))
+    with metric_cols_1[2]:
+        render_metric_box("L10 Hit Rate", f"{format_num(row['L10_HIT_RATE'], 0)}%")
+    with metric_cols_1[3]:
+        render_metric_box("Season Hit Rate", f"{format_num(row['SEASON_HIT_RATE'], 0)}%")
 
-        metric_cols_2 = st.columns(3)
-        with metric_cols_2[0]:
-            render_metric_box("Hidden Gem", f"{int(round(row['CONFIDENCE'], 0))}%", score=True)
-        with metric_cols_2[1]:
-            render_metric_box("DVP", row["DVP_NOTE"])
-        with metric_cols_2[2]:
-            render_metric_box("Injury Context", row.get("INJURY_NOTE", "No major injury context"))
-
-        st.markdown("</div>", unsafe_allow_html=True)
+    metric_cols_2 = st.columns(3)
+    with metric_cols_2[0]:
+        render_metric_box("Hidden Gem", f"{int(round(row['CONFIDENCE'], 0))}%", score=True)
+    with metric_cols_2[1]:
+        render_metric_box("DVP", row["DVP_NOTE"])
+    with metric_cols_2[2]:
+        render_metric_box("Injury Context", row.get("INJURY_NOTE", "No major injury context"))
 
 
 def render_bet_cards(df: pd.DataFrame, lean_type: str):
@@ -1198,7 +1247,7 @@ def render_bet_cards(df: pd.DataFrame, lean_type: str):
         return
 
     for _, row in subset.iterrows():
-        render_single_card(row, rank_num=None)
+        render_single_card(row, rank_num=None, compact=False)
 
 
 def render_full_cheatsheet_cards(df: pd.DataFrame):
@@ -1218,7 +1267,7 @@ def render_full_cheatsheet_cards(df: pd.DataFrame):
             row = ranked_df.iloc[row_idx]
 
             with cols[col_idx]:
-                render_single_card(row, rank_num=row_idx + 1)
+                render_single_card(row, rank_num=row_idx + 1, compact=True)
 
 
 # =========================
@@ -1237,7 +1286,7 @@ if not props_preview.empty:
 # =========================
 # CENTERED CONTROLS
 # =========================
-left_spacer, center_col, right_spacer = st.columns([1, 5, 1])
+left_spacer, center_col, right_spacer = st.columns([0.6, 5.8, 0.6])
 
 with center_col:
     st.markdown('<div class="control-card">', unsafe_allow_html=True)
@@ -1276,6 +1325,8 @@ with center_col:
 
     with top_controls[3]:
         run_model = st.button("Run Selected View", use_container_width=True)
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
 
     with st.expander("Pregame Injuries", expanded=False):
         injury_cols_1 = st.columns(2)
@@ -1376,6 +1427,7 @@ if run_model:
             st.markdown('<div class="section-title">❄️ Best Unders (Top 5)</div>', unsafe_allow_html=True)
             render_bet_cards(cheatsheet, "UNDER")
 
+        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
         st.markdown('<div class="section-title">📋 Full Cheatsheet (ranked)</div>', unsafe_allow_html=True)
         render_full_cheatsheet_cards(cheatsheet)
 
@@ -1388,5 +1440,16 @@ if run_model:
     )
 
 else:
-    st.info("Pick your filters, add injuries in the dropdowns if needed, then click Run Selected View.")
-
+    st.markdown(
+        """
+        <div class="control-card" style="text-align:center; padding: 22px 18px;">
+            <div style="font-size:1.1rem; font-weight:800; color:#f8fafc; margin-bottom:6px;">
+                Ready to build today's board
+            </div>
+            <div style="font-size:0.92rem; color:#94a3b8;">
+                Pick your filters, add pregame injuries if needed, then click <b>Run Selected View</b>.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
