@@ -87,13 +87,13 @@ st.markdown(
         background: linear-gradient(180deg, rgba(17, 24, 39, 0.97), rgba(12, 18, 31, 0.97));
         border: 1px solid rgba(148, 163, 184, 0.14);
         border-radius: 16px;
-        padding: 12px 12px 10px 12px;
+        padding: 12px;
         box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
         margin-bottom: 12px;
     }
 
     .bet-card.compact {
-        padding: 10px 11px 9px 11px;
+        padding: 10px 11px;
         margin-bottom: 10px;
     }
 
@@ -102,7 +102,7 @@ st.markdown(
         align-items: flex-start;
         justify-content: space-between;
         gap: 12px;
-        margin-bottom: 4px;
+        margin-bottom: 6px;
     }
 
     .player-block {
@@ -211,6 +211,20 @@ st.markdown(
         gap: 0;
     }
 
+    .metrics-grid {
+        display: grid;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    .metrics-grid-4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .metrics-grid-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
     .metric-box-wrap {
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(148, 163, 184, 0.10);
@@ -273,7 +287,7 @@ st.markdown(
 
         .bet-card,
         .bet-card.compact {
-            padding: 10px 10px 9px 10px;
+            padding: 10px;
         }
 
         .player-name {
@@ -282,6 +296,14 @@ st.markdown(
 
         .line-value {
             font-size: 1rem;
+        }
+
+        .metrics-grid-4 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .metrics-grid-3 {
+            grid-template-columns: repeat(1, minmax(0, 1fr));
         }
     }
     </style>
@@ -1154,78 +1176,79 @@ def lean_pill_class(lean: str):
     return "pill-pass"
 
 
-def render_metric_box(label: str, value: str, score: bool = False):
-    extra_class = " metric-score" if score else ""
-    st.markdown(
-        f"""
-        <div class="metric-box-wrap">
-            <div class="metric-label">{label}</div>
-            <div class="metric-value{extra_class}">{value}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 def render_single_card(row, rank_num=None, compact=False):
     pill_class = lean_pill_class(row["LEAN"])
     card_class = "bet-card compact" if compact else "bet-card"
 
     if rank_num is not None:
-        player_html = f"""
-        <div class="rank-wrap">
-            <span class="rank-badge">#{rank_num}</span>
-            <div class="player-block">
-                <div class="player-name">{row['PLAYER']}</div>
-                <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
-            </div>
-        </div>
-        """
+        header_html = f"""
+<div class="rank-wrap">
+    <span class="rank-badge">#{rank_num}</span>
+    <div class="player-block">
+        <div class="player-name">{row['PLAYER']}</div>
+        <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
+    </div>
+</div>
+"""
     else:
-        player_html = f"""
-        <div class="player-block">
-            <div class="player-name">{row['PLAYER']}</div>
-            <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
+        header_html = f"""
+<div class="player-block">
+    <div class="player-name">{row['PLAYER']}</div>
+    <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
+</div>
+"""
+
+    card_html = f"""
+<div class="{card_class}">
+    <div class="card-top">
+        {header_html}
+        <div class="card-linebox">
+            <div class="line-label">Line</div>
+            <div class="line-value">{format_num(row['LINE'])}</div>
         </div>
-        """
+    </div>
 
-    st.markdown(
-        f"""
-        <div class="{card_class}">
-            <div class="card-top">
-                {player_html}
-                <div class="card-linebox">
-                    <div class="line-label">Line</div>
-                    <div class="line-value">{format_num(row['LINE'])}</div>
-                </div>
-            </div>
+    <div class="pill-row">
+        <span class="pill pill-stat">{row['STAT']}</span>
+        <span class="pill {pill_class}">{row['LEAN']}</span>
+    </div>
 
-            <div class="pill-row">
-                <span class="pill pill-stat">{row['STAT']}</span>
-                <span class="pill {pill_class}">{row['LEAN']}</span>
-            </div>
+    <div class="metrics-grid metrics-grid-4">
+        <div class="metric-box-wrap">
+            <div class="metric-label">Projection</div>
+            <div class="metric-value">{format_num(row['PROJECTION'])}</div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        <div class="metric-box-wrap">
+            <div class="metric-label">L10 Avg</div>
+            <div class="metric-value">{format_num(row['L10_AVG'])}</div>
+        </div>
+        <div class="metric-box-wrap">
+            <div class="metric-label">L10 Hit Rate</div>
+            <div class="metric-value">{format_num(row['L10_HIT_RATE'], 0)}%</div>
+        </div>
+        <div class="metric-box-wrap">
+            <div class="metric-label">Season Hit Rate</div>
+            <div class="metric-value">{format_num(row['SEASON_HIT_RATE'], 0)}%</div>
+        </div>
+    </div>
 
-    metric_cols_1 = st.columns(4)
-    with metric_cols_1[0]:
-        render_metric_box("Projection", format_num(row["PROJECTION"]))
-    with metric_cols_1[1]:
-        render_metric_box("L10 Avg", format_num(row["L10_AVG"]))
-    with metric_cols_1[2]:
-        render_metric_box("L10 Hit Rate", f"{format_num(row['L10_HIT_RATE'], 0)}%")
-    with metric_cols_1[3]:
-        render_metric_box("Season Hit Rate", f"{format_num(row['SEASON_HIT_RATE'], 0)}%")
-
-    metric_cols_2 = st.columns(3)
-    with metric_cols_2[0]:
-        render_metric_box("Hidden Gem", f"{int(round(row['CONFIDENCE'], 0))}%", score=True)
-    with metric_cols_2[1]:
-        render_metric_box("DVP", row["DVP_NOTE"])
-    with metric_cols_2[2]:
-        render_metric_box("Injury Context", row.get("INJURY_NOTE", "No major injury context"))
+    <div class="metrics-grid metrics-grid-3">
+        <div class="metric-box-wrap">
+            <div class="metric-label">Hidden Gem</div>
+            <div class="metric-value metric-score">{int(round(row['CONFIDENCE'], 0))}%</div>
+        </div>
+        <div class="metric-box-wrap">
+            <div class="metric-label">DVP</div>
+            <div class="metric-value">{row['DVP_NOTE']}</div>
+        </div>
+        <div class="metric-box-wrap">
+            <div class="metric-label">Injury Context</div>
+            <div class="metric-value">{row.get('INJURY_NOTE', 'No major injury context')}</div>
+        </div>
+    </div>
+</div>
+"""
+    st.markdown(card_html, unsafe_allow_html=True)
 
 
 def render_bet_cards(df: pd.DataFrame, lean_type: str):
