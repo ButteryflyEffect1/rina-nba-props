@@ -776,17 +776,26 @@ def get_team_recent_allowed_stats(last_n_games: int = 10):
     if df.empty:
         return df
 
-    df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"])
+    df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"], errors="coerce")
     df = df.sort_values("GAME_DATE", ascending=False).reset_index(drop=True)
 
-    base_cols = ["GAME_ID", "TEAM_ID", "TEAM_ABBREVIATION", "GAME_DATE", "PTS", "REB", "AST"]
-    existing_cols = [c for c in base_cols if c in df.columns]
+    if "TEAM_ID" in df.columns:
+        team_key = "TEAM_ID"
+    elif "TEAM_ABBREVIATION" in df.columns:
+        team_key = "TEAM_ABBREVIATION"
+    else:
+        return pd.DataFrame()
+
+    needed_cols = ["GAME_ID", team_key, "GAME_DATE", "PTS", "REB", "AST"]
+    if "TEAM_ABBREVIATION" in df.columns and "TEAM_ABBREVIATION" not in needed_cols:
+        needed_cols.append("TEAM_ABBREVIATION")
+
+    existing_cols = [c for c in needed_cols if c in df.columns]
     df = df[existing_cols].copy()
 
     opp_df = df.rename(
         columns={
-            "TEAM_ID": "OPP_TEAM_ID",
-            "TEAM_ABBREVIATION": "OPP_TEAM_ABBR",
+            team_key: "OPP_TEAM_KEY",
             "PTS": "OPP_PTS",
             "REB": "OPP_REB",
             "AST": "OPP_AST",
@@ -794,18 +803,22 @@ def get_team_recent_allowed_stats(last_n_games: int = 10):
     )
 
     merged = df.merge(opp_df, on="GAME_ID", how="inner")
-    merged = merged[merged["TEAM_ID"] != merged["OPP_TEAM_ID"]].copy()
+    merged = merged[merged[team_key] != merged["OPP_TEAM_KEY"]].copy()
 
     merged["PTS_ALLOWED"] = merged["OPP_PTS"]
     merged["REB_ALLOWED"] = merged["OPP_REB"]
     merged["AST_ALLOWED"] = merged["OPP_AST"]
 
-    merged = merged.sort_values(["TEAM_ID", "GAME_DATE"], ascending=[True, False])
+    merged = merged.sort_values([team_key, "GAME_DATE"], ascending=[True, False])
+
+    group_cols = [team_key]
+    if "TEAM_ABBREVIATION" in merged.columns:
+        group_cols.append("TEAM_ABBREVIATION")
 
     recent = (
-        merged.groupby("TEAM_ID", group_keys=False)
+        merged.groupby(team_key, group_keys=False)
         .head(last_n_games)
-        .groupby(["TEAM_ID", "TEAM_ABBREVIATION"], as_index=False)
+        .groupby(group_cols, as_index=False)
         .agg(
             PTS_ALLOWED=("PTS_ALLOWED", "mean"),
             REB_ALLOWED=("REB_ALLOWED", "mean"),
@@ -1228,10 +1241,17 @@ def usage_multiplier(player_id: int, stat: str, player_adv_df: pd.DataFrame):
 
 
 def opponent_allowance_multiplier(opponent_abbr: str, stat: str, team_allowed_df: pd.DataFrame):
-    if team_allowed_df.empty or not opponent_abbr or "TEAM_ABBREVIATION" not in team_allowed_df.columns:
+    if team_allowed_df.empty or not opponent_abbr:
         return 1.00, math.nan, "Neutral opponent stat environment"
 
-    row = team_allowed_df[team_allowed_df["TEAM_ABBREVIATION"] == opponent_abbr]
+    if "TEAM_ABBREVIATION" in team_allowed_df.columns:
+        lookup_col = "TEAM_ABBREVIATION"
+    elif "TEAM_ID" in team_allowed_df.columns:
+        return 1.00, math.nan, "Neutral opponent stat environment"
+    else:
+        return 1.00, math.nan, "Neutral opponent stat environment"
+
+    row = team_allowed_df[team_allowed_df[lookup_col] == opponent_abbr]
     if row.empty:
         return 1.00, math.nan, "Neutral opponent stat environment"
 
