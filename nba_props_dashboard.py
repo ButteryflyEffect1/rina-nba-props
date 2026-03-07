@@ -5,7 +5,13 @@ import pandas as pd
 import streamlit as st
 
 from nba_api.stats.static import players, teams
-from nba_api.stats.endpoints import playergamelog, teamgamelog
+from nba_api.stats.endpoints import (
+    playergamelog,
+    teamgamelog,
+    leaguedashteamstats,
+    leaguedashplayerstats,
+    leaguegamelog,
+)
 
 
 # =========================
@@ -423,6 +429,7 @@ TEAM_NAME_TO_ABBR = {
 
 NBA_TEAMS = teams.get_teams()
 TEAM_ABBR_TO_ID = {t["abbreviation"]: t["id"] for t in NBA_TEAMS}
+TEAM_ID_TO_ABBR = {t["id"]: t["abbreviation"] for t in NBA_TEAMS}
 
 
 def team_name_to_abbr(name: str):
@@ -649,7 +656,7 @@ def get_props():
 
 
 # =========================
-# NBA GAME LOGS
+# NBA GAME LOGS / ADVANCED
 # =========================
 @st.cache_data(ttl=43200)
 def get_game_log(player_id: int):
@@ -693,6 +700,124 @@ def get_team_game_log(team_id: int):
     df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"])
     df = df.sort_values("GAME_DATE", ascending=False).reset_index(drop=True)
     return df
+
+
+@st.cache_data(ttl=21600)
+def get_team_advanced_stats():
+    time.sleep(REQUEST_SLEEP)
+
+    df = leaguedashteamstats.LeagueDashTeamStats(
+        season=SEASON,
+        season_type_all_star="Regular Season",
+        per_mode_detailed="PerGame",
+        measure_type_detailed_defense="Advanced",
+    ).get_data_frames()[0]
+
+    if df.empty:
+        return df
+
+    if "TEAM_ID" in df.columns:
+        df["TEAM_ABBR"] = df["TEAM_ID"].map(TEAM_ID_TO_ABBR)
+
+    keep_cols = [
+        "TEAM_ID",
+        "TEAM_ABBR",
+        "PACE",
+        "OFF_RATING",
+        "DEF_RATING",
+        "NET_RATING",
+    ]
+    existing_cols = [c for c in keep_cols if c in df.columns]
+    return df[existing_cols].copy()
+
+
+@st.cache_data(ttl=21600)
+def get_player_advanced_stats():
+    time.sleep(REQUEST_SLEEP)
+
+    df = leaguedashplayerstats.LeagueDashPlayerStats(
+        season=SEASON,
+        season_type_all_star="Regular Season",
+        per_mode_detailed="PerGame",
+        measure_type_detailed_defense="Advanced",
+    ).get_data_frames()[0]
+
+    if df.empty:
+        return df
+
+    keep_cols = [
+        "PLAYER_ID",
+        "PLAYER_NAME",
+        "TEAM_ID",
+        "MIN",
+        "OFF_RATING",
+        "DEF_RATING",
+        "NET_RATING",
+        "AST_PCT",
+        "REB_PCT",
+        "USG_PCT",
+        "TS_PCT",
+        "PIE",
+    ]
+    existing_cols = [c for c in keep_cols if c in df.columns]
+    return df[existing_cols].copy()
+
+
+@st.cache_data(ttl=21600)
+def get_team_recent_allowed_stats(last_n_games: int = 10):
+    time.sleep(REQUEST_SLEEP)
+
+    df = leaguegamelog.LeagueGameLog(
+        season=SEASON,
+        season_type_all_star="Regular Season",
+        player_or_team_abbreviation="T",
+    ).get_data_frames()[0]
+
+    if df.empty:
+        return df
+
+    df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"])
+    df = df.sort_values("GAME_DATE", ascending=False).reset_index(drop=True)
+
+    base_cols = ["GAME_ID", "TEAM_ID", "TEAM_ABBREVIATION", "GAME_DATE", "PTS", "REB", "AST"]
+    existing_cols = [c for c in base_cols if c in df.columns]
+    df = df[existing_cols].copy()
+
+    opp_df = df.rename(
+        columns={
+            "TEAM_ID": "OPP_TEAM_ID",
+            "TEAM_ABBREVIATION": "OPP_TEAM_ABBR",
+            "PTS": "OPP_PTS",
+            "REB": "OPP_REB",
+            "AST": "OPP_AST",
+        }
+    )
+
+    merged = df.merge(opp_df, on="GAME_ID", how="inner")
+    merged = merged[merged["TEAM_ID"] != merged["OPP_TEAM_ID"]].copy()
+
+    merged["PTS_ALLOWED"] = merged["OPP_PTS"]
+    merged["REB_ALLOWED"] = merged["OPP_REB"]
+    merged["AST_ALLOWED"] = merged["OPP_AST"]
+
+    merged = merged.sort_values(["TEAM_ID", "GAME_DATE"], ascending=[True, False])
+
+    recent = (
+        merged.groupby("TEAM_ID", group_keys=False)
+        .head(last_n_games)
+        .groupby(["TEAM_ID", "TEAM_ABBREVIATION"], as_index=False)
+        .agg(
+            PTS_ALLOWED=("PTS_ALLOWED", "mean"),
+            REB_ALLOWED=("REB_ALLOWED", "mean"),
+            AST_ALLOWED=("AST_ALLOWED", "mean"),
+        )
+    )
+
+    recent["PTS_ALLOWED"] = recent["PTS_ALLOWED"].round(2)
+    recent["REB_ALLOWED"] = recent["REB_ALLOWED"].round(2)
+    recent["AST_ALLOWED"] = recent["AST_ALLOWED"].round(2)
+
+    return recent
 
 
 # =========================
@@ -1035,6 +1160,116 @@ def opponent_dvp_context(opponent_abbr: str):
     return rank_proxy, mult, bonus, note
 
 
+def get_team_pace(team_abbr: str, team_adv_df: pd.DataFrame):
+    if team_adv_df.empty or not team_abbr or "TEAM_ABBR" not in team_adv_df.columns:
+        return math.nan
+
+    row = team_adv_df[team_adv_df["TEAM_ABBR"] == team_abbr]
+    if row.empty or "PACE" not in row.columns:
+        return math.nan
+
+    return float(row.iloc[0]["PACE"])
+
+
+def pace_multiplier(team_abbr: str, opponent_abbr: str, team_adv_df: pd.DataFrame):
+    team_pace = get_team_pace(team_abbr, team_adv_df)
+    opp_pace = get_team_pace(opponent_abbr, team_adv_df)
+
+    if pd.isna(team_pace) or pd.isna(opp_pace):
+        return 1.00, math.nan, math.nan
+
+    league_avg_pace = pd.to_numeric(team_adv_df["PACE"], errors="coerce").dropna().mean()
+    if pd.isna(league_avg_pace) or league_avg_pace == 0:
+        return 1.00, team_pace, opp_pace
+
+    game_pace = (team_pace + opp_pace) / 2
+    mult = game_pace / league_avg_pace
+
+    return round(max(0.95, min(1.05, mult)), 4), round(team_pace, 2), round(opp_pace, 2)
+
+
+def get_player_adv_row(player_id: int, player_adv_df: pd.DataFrame):
+    if player_adv_df.empty or "PLAYER_ID" not in player_adv_df.columns:
+        return None
+
+    row = player_adv_df[player_adv_df["PLAYER_ID"] == player_id]
+    if row.empty:
+        return None
+
+    return row.iloc[0]
+
+
+def usage_multiplier(player_id: int, stat: str, player_adv_df: pd.DataFrame):
+    row = get_player_adv_row(player_id, player_adv_df)
+    if row is None or "USG_PCT" not in row.index:
+        return 1.00, math.nan
+
+    usg = pd.to_numeric(pd.Series([row["USG_PCT"]]), errors="coerce").iloc[0]
+    if pd.isna(usg):
+        return 1.00, math.nan
+
+    league_avg_usg = pd.to_numeric(player_adv_df["USG_PCT"], errors="coerce").dropna().mean()
+    if pd.isna(league_avg_usg):
+        return 1.00, round(float(usg), 2)
+
+    delta = float(usg) - float(league_avg_usg)
+
+    if stat == "PTS":
+        mult = 1 + (delta * 0.010)
+    elif stat == "AST":
+        mult = 1 + (delta * 0.006)
+    elif stat == "REB":
+        mult = 1 + (delta * 0.004)
+    else:
+        mult = 1.00
+
+    mult = max(0.94, min(1.08, mult))
+    return round(mult, 4), round(float(usg), 2)
+
+
+def opponent_allowance_multiplier(opponent_abbr: str, stat: str, team_allowed_df: pd.DataFrame):
+    if team_allowed_df.empty or not opponent_abbr or "TEAM_ABBREVIATION" not in team_allowed_df.columns:
+        return 1.00, math.nan, "Neutral opponent stat environment"
+
+    row = team_allowed_df[team_allowed_df["TEAM_ABBREVIATION"] == opponent_abbr]
+    if row.empty:
+        return 1.00, math.nan, "Neutral opponent stat environment"
+
+    row = row.iloc[0]
+
+    if stat == "PTS":
+        col = "PTS_ALLOWED"
+    elif stat == "REB":
+        col = "REB_ALLOWED"
+    else:
+        col = "AST_ALLOWED"
+
+    if col not in team_allowed_df.columns:
+        return 1.00, math.nan, "Neutral opponent stat environment"
+
+    allowed_val = pd.to_numeric(pd.Series([row[col]]), errors="coerce").iloc[0]
+    league_avg = pd.to_numeric(team_allowed_df[col], errors="coerce").dropna().mean()
+
+    if pd.isna(allowed_val) or pd.isna(league_avg) or league_avg == 0:
+        return 1.00, math.nan, "Neutral opponent stat environment"
+
+    ratio = float(allowed_val) / float(league_avg)
+    mult = max(0.95, min(1.05, ratio))
+
+    if ratio >= 1.04:
+        note = f"Opponent allows high {stat}"
+    elif ratio >= 1.01:
+        note = f"Opponent slightly soft vs {stat}"
+    elif ratio <= 0.96:
+        note = f"Opponent suppresses {stat}"
+    elif ratio <= 0.99:
+        note = f"Opponent slightly tough vs {stat}"
+    else:
+        note = f"Neutral vs {stat}"
+
+    return round(mult, 4), round(float(allowed_val), 2), note
+
+
 def improved_hidden_gem_score(
     l5_hit: float,
     l10_hit: float,
@@ -1114,6 +1349,10 @@ def build_cheatsheet(props_df: pd.DataFrame, injury_map: dict):
     if props_df.empty:
         return pd.DataFrame()
 
+    team_adv_df = get_team_advanced_stats()
+    player_adv_df = get_player_advanced_stats()
+    team_allowed_df = get_team_recent_allowed_stats(last_n_games=10)
+
     rows = []
     progress_text = st.empty()
     progress_bar = st.progress(0)
@@ -1172,8 +1411,14 @@ def build_cheatsheet(props_df: pd.DataFrame, injury_map: dict):
         dvp_rank, dvp_mult, dvp_bonus, dvp_note = opponent_dvp_context(opponent)
         proj_mult, gem_adj, injury_note = injury_adjustment(team_injuries, stat)
 
+        pace_mult, team_pace, opp_pace = pace_multiplier(team, opponent, team_adv_df)
+        usg_mult, usg_pct = usage_multiplier(player_id, stat, player_adv_df)
+        opp_allow_mult, opp_allow_val, opp_allow_note = opponent_allowance_multiplier(
+            opponent, stat, team_allowed_df
+        )
+
         projection = (
-            round(base_projection * dvp_mult * proj_mult, 2)
+            round(base_projection * dvp_mult * proj_mult * pace_mult * usg_mult * opp_allow_mult, 2)
             if not pd.isna(base_projection)
             else math.nan
         )
@@ -1213,6 +1458,14 @@ def build_cheatsheet(props_df: pd.DataFrame, injury_map: dict):
                 "DVP_RANK": dvp_rank,
                 "DVP_NOTE": dvp_note,
                 "INJURY_NOTE": injury_note,
+                "TEAM_PACE": team_pace,
+                "OPP_PACE": opp_pace,
+                "PACE_MULT": pace_mult,
+                "USG_PCT": usg_pct,
+                "USG_MULT": usg_mult,
+                "OPP_ALLOW_VAL": opp_allow_val,
+                "OPP_ALLOW_MULT": opp_allow_mult,
+                "OPP_ALLOW_NOTE": opp_allow_note,
                 "PROJECTION": projection,
                 "EDGE": edge,
                 "CONFIDENCE": hidden_gem,
