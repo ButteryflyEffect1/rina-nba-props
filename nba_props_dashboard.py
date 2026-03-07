@@ -380,7 +380,7 @@ st.markdown(
 st.markdown(
     """
     <div class="hero-card">
-        <div class="hero-title">Ready to build today's board</div>
+        <div class="hero-title">Research the Rina way</div>
         <div class="hero-text">
             Pick your filters, add pregame injuries if needed, then click <b>Run Selected View</b>.
         </div>
@@ -1817,3 +1817,4 @@ if run_model:
 
 else:
     pass
+
