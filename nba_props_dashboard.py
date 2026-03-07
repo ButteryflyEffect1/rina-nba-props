@@ -774,7 +774,7 @@ def get_team_recent_allowed_stats(last_n_games: int = 10):
     ).get_data_frames()[0]
 
     if df.empty:
-        return df
+        return pd.DataFrame()
 
     df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"], errors="coerce")
     df = df.sort_values("GAME_DATE", ascending=False).reset_index(drop=True)
@@ -786,14 +786,16 @@ def get_team_recent_allowed_stats(last_n_games: int = 10):
     else:
         return pd.DataFrame()
 
-    needed_cols = ["GAME_ID", team_key, "GAME_DATE", "PTS", "REB", "AST"]
-    if "TEAM_ABBREVIATION" in df.columns and "TEAM_ABBREVIATION" not in needed_cols:
-        needed_cols.append("TEAM_ABBREVIATION")
+    needed_cols = [
+        c for c in ["GAME_ID", "GAME_DATE", team_key, "TEAM_ABBREVIATION", "PTS", "REB", "AST"]
+        if c in df.columns
+    ]
+    df = df[needed_cols].copy()
 
-    existing_cols = [c for c in needed_cols if c in df.columns]
-    df = df[existing_cols].copy()
+    opp_keep_cols = ["GAME_ID", team_key, "PTS", "REB", "AST"]
+    opp_keep_cols = [c for c in opp_keep_cols if c in df.columns]
 
-    opp_df = df.rename(
+    opp_df = df[opp_keep_cols].rename(
         columns={
             team_key: "OPP_TEAM_KEY",
             "PTS": "OPP_PTS",
