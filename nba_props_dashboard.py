@@ -41,13 +41,13 @@ st.markdown(
     }
 
     .block-container {
-        padding-top: 1.4rem;
+        padding-top: 3.2rem;
         padding-bottom: 2.2rem;
         max-width: 1360px;
     }
 
     .title-wrap {
-        margin-bottom: 1.1rem;
+        margin-bottom: 0.8rem;
     }
 
     .app-title {
@@ -55,7 +55,7 @@ st.markdown(
         font-weight: 800;
         color: #f8fafc;
         margin-bottom: 0.15rem;
-        line-height: 1.0;
+        line-height: 1.05;
         letter-spacing: -0.02em;
     }
 
@@ -64,6 +64,28 @@ st.markdown(
         font-size: 0.95rem;
         margin-top: 0;
         margin-bottom: 0;
+    }
+
+    .hero-card {
+        background: linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(12, 18, 31, 0.96));
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 18px;
+        padding: 22px 18px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+        margin: 0.9rem 0 1rem 0;
+        text-align: center;
+    }
+
+    .hero-title {
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #f8fafc;
+        margin-bottom: 6px;
+    }
+
+    .hero-text {
+        font-size: 0.92rem;
+        color: #94a3b8;
     }
 
     .section-title {
@@ -78,7 +100,7 @@ st.markdown(
         background: linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(12, 18, 31, 0.96));
         border: 1px solid rgba(148, 163, 184, 0.14);
         border-radius: 18px;
-        padding: 14px 14px 8px 14px;
+        padding: 14px 14px 10px 14px;
         box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
         margin-bottom: 1rem;
     }
@@ -254,7 +276,7 @@ st.markdown(
     }
 
     .divider-space {
-        height: 2px;
+        height: 8px;
     }
 
     [data-testid="collapsedControl"] {
@@ -264,6 +286,23 @@ st.markdown(
     div[data-testid="stDownloadButton"] > button {
         border-radius: 12px;
         font-weight: 700;
+    }
+
+    .streamlit-expanderHeader {
+        background: rgba(15, 23, 42, 0.55);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 12px;
+        padding: 0.9rem 1rem;
+        color: #f8fafc;
+        font-weight: 700;
+    }
+
+    .streamlit-expanderContent {
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        border-top: none;
+        border-radius: 0 0 12px 12px;
+        background: rgba(10, 18, 32, 0.35);
+        padding-top: 0.8rem;
     }
 
     @media (max-width: 1100px) {
@@ -278,11 +317,22 @@ st.markdown(
 
     @media (max-width: 760px) {
         .block-container {
-            padding-top: 1rem;
+            padding-top: 4.2rem;
+            padding-bottom: 1.6rem;
         }
 
         .app-title {
             font-size: 2.0rem;
+            line-height: 1.08;
+        }
+
+        .app-subtitle {
+            font-size: 0.9rem;
+        }
+
+        .hero-card {
+            margin-top: 0.8rem;
+            padding: 18px 16px;
         }
 
         .bet-card,
@@ -316,6 +366,18 @@ st.markdown(
     <div class="title-wrap">
         <div class="app-title">Rina's Cheatsheet</div>
         <div class="app-subtitle">NBA player props dashboard for points, rebounds, and assists</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    """
+    <div class="hero-card">
+        <div class="hero-title">Ready to build today's board</div>
+        <div class="hero-text">
+            Pick your filters, add pregame injuries if needed, then click <b>Run Selected View</b>.
+        </div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -1023,13 +1085,25 @@ def get_team_and_opponent(player_team: str, home_team: str, away_team: str):
     return player_team, None
 
 
-def get_lean(projection: float, line: float, threshold: float = 1.0):
+def get_lean(projection: float, line: float, stat: str):
     if pd.isna(projection) or pd.isna(line):
         return "PASS"
+
+    if stat == "PTS":
+        threshold = 1.5
+    elif stat == "REB":
+        threshold = 1.2
+    elif stat == "AST":
+        threshold = 1.0
+    else:
+        threshold = 1.0
+
     if projection >= line + threshold:
         return "OVER"
+
     if projection <= line - threshold:
         return "UNDER"
+
     return "PASS"
 
 
@@ -1117,7 +1191,7 @@ def build_cheatsheet(props_df: pd.DataFrame, injury_map: dict):
         )
         hidden_gem = max(0, min(100, hidden_gem + gem_adj))
 
-        lean = get_lean(projection, line)
+        lean = get_lean(projection, line, stat)
 
         rows.append(
             {
@@ -1317,7 +1391,7 @@ left_spacer, center_col, right_spacer = st.columns([0.6, 5.8, 0.6])
 with center_col:
     st.markdown('<div class="control-card">', unsafe_allow_html=True)
 
-    top_controls = st.columns(4)
+    top_controls = st.columns(3)
 
     with top_controls[0]:
         view_mode = st.selectbox(
@@ -1348,9 +1422,6 @@ with center_col:
             index=0,
             key="selected_player_main",
         )
-
-    with top_controls[3]:
-        run_model = st.button("Run Selected View", use_container_width=True)
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
 
@@ -1393,6 +1464,10 @@ with center_col:
                 placeholder="Search players...",
                 key="injured_probable",
             )
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+
+    run_model = st.button("Run Selected View", use_container_width=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1466,16 +1541,4 @@ if run_model:
     )
 
 else:
-    st.markdown(
-        """
-        <div class="control-card" style="text-align:center; padding: 22px 18px;">
-            <div style="font-size:1.1rem; font-weight:800; color:#f8fafc; margin-bottom:6px;">
-                Ready to build today's board
-            </div>
-            <div style="font-size:0.92rem; color:#94a3b8;">
-                Pick your filters, add pregame injuries if needed, then click <b>Run Selected View</b>.
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    pass
