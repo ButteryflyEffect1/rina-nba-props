@@ -1149,7 +1149,7 @@ def usage_multiplier(player_id: int, stat: str, player_adv_df: pd.DataFrame):
 
     league_avg_usg = pd.to_numeric(player_adv_df["USG_PCT"], errors="coerce").dropna().mean()
     if pd.isna(league_avg_usg):
-        return 1.00, round(float(usg), 2)
+        return 1.00, round(float(usg), 4)
 
     delta = float(usg) - float(league_avg_usg)
 
@@ -1163,7 +1163,7 @@ def usage_multiplier(player_id: int, stat: str, player_adv_df: pd.DataFrame):
         mult = 1.00
 
     mult = max(0.94, min(1.08, mult))
-    return round(mult, 4), round(float(usg), 2)
+    return round(mult, 4), round(float(usg), 4)
 
 
 def get_true_dvp_rank(opponent_abbr: str, stat: str, team_allowed_df: pd.DataFrame):
@@ -1187,7 +1187,6 @@ def get_true_dvp_rank(opponent_abbr: str, stat: str, team_allowed_df: pd.DataFra
     if temp.empty:
         return math.nan
 
-    # 1 = toughest (fewest allowed), 30 = easiest (most allowed)
     temp["DVP_RANK"] = temp[col].rank(method="min", ascending=True)
 
     row = temp[temp["TEAM_ABBREVIATION"] == opponent_abbr]
@@ -1417,8 +1416,6 @@ def build_cheatsheet(props_df: pd.DataFrame, injury_map: dict):
             opponent, stat, team_allowed_df
         )
 
-        # True DVP rank is now used for ranking/context.
-        # Projection uses the actual opponent-allowance multiplier to avoid double-counting matchup.
         projection = (
             round(base_projection * proj_mult * pace_mult * usg_mult * opp_allow_mult, 2)
             if not pd.isna(base_projection)
@@ -1527,8 +1524,6 @@ def render_single_card(row, rank_num=None, compact=False):
             f'</div>'
         )
 
-    injury_note = row.get("INJURY_NOTE", "No major injury context")
-
     dvp_rank = row.get("DVP_RANK", math.nan)
     if pd.isna(dvp_rank):
         dvp_display = "Neutral"
@@ -1536,7 +1531,28 @@ def render_single_card(row, rank_num=None, compact=False):
         dvp_display = f'{ordinal_rank(int(round(float(dvp_rank), 0)))} vs {row["STAT"]}'
 
     usg_pct = row.get("USG_PCT", math.nan)
-    usg_display = "-" if pd.isna(usg_pct) else f'{float(usg_pct):.1f}%'
+    if pd.isna(usg_pct):
+        usg_display = "-"
+    else:
+        usg_val = float(usg_pct)
+        if usg_val <= 1:
+            usg_val *= 100
+        usg_display = f"{usg_val:.1f}%"
+
+    hidden_gem_val = row.get("CONFIDENCE", math.nan)
+    if pd.isna(hidden_gem_val):
+        hidden_gem_display = "-"
+        hidden_gem_color = "#f8fafc"
+    else:
+        hidden_gem_num = int(round(float(hidden_gem_val), 0))
+        hidden_gem_display = f"{hidden_gem_num}%"
+
+        if hidden_gem_num >= 65:
+            hidden_gem_color = "#22c55e"
+        elif hidden_gem_num >= 50:
+            hidden_gem_color = "#facc15"
+        else:
+            hidden_gem_color = "#ef4444"
 
     card_html = (
         f'<div class="{card_class}">'
@@ -1575,7 +1591,7 @@ def render_single_card(row, rank_num=None, compact=False):
             f'<div class="metrics-grid metrics-grid-4">'
                 f'<div class="metric-box-wrap">'
                     f'<div class="metric-label">Hidden Gem</div>'
-                    f'<div class="metric-value metric-score">{int(round(row["CONFIDENCE"], 0))}%</div>'
+                    f'<div class="metric-value" style="color:{hidden_gem_color};">{hidden_gem_display}</div>'
                 f'</div>'
                 f'<div class="metric-box-wrap">'
                     f'<div class="metric-label">USG %</div>'
@@ -1584,10 +1600,6 @@ def render_single_card(row, rank_num=None, compact=False):
                 f'<div class="metric-box-wrap">'
                     f'<div class="metric-label">DVP Rank</div>'
                     f'<div class="metric-value">{dvp_display}</div>'
-                f'</div>'
-                f'<div class="metric-box-wrap">'
-                    f'<div class="metric-label">Injury Context</div>'
-                    f'<div class="metric-value">{injury_note}</div>'
                 f'</div>'
             f'</div>'
         f'</div>'
