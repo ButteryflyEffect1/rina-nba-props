@@ -273,10 +273,6 @@ st.markdown(
         word-break: break-word;
     }
 
-    .metric-score {
-        color: #60a5fa;
-    }
-
     .divider-space {
         height: 8px;
     }
@@ -756,7 +752,7 @@ def get_player_advanced_stats():
 
 
 @st.cache_data(ttl=21600)
-def get_team_recent_allowed_stats(last_n_games: int = 10):
+def get_team_defensive_stats(last_n_games: int = 10):
     time.sleep(REQUEST_SLEEP)
 
     df = leaguegamelog.LeagueGameLog(
@@ -799,32 +795,62 @@ def get_team_recent_allowed_stats(last_n_games: int = 10):
     merged = df.merge(opp_df, on="GAME_ID", how="inner")
     merged = merged[merged[team_key] != merged["OPP_TEAM_KEY"]].copy()
 
-    merged["PTS_ALLOWED"] = merged["OPP_PTS"]
-    merged["REB_ALLOWED"] = merged["OPP_REB"]
-    merged["AST_ALLOWED"] = merged["OPP_AST"]
+    merged["PTS_ALLOWED"] = pd.to_numeric(merged["OPP_PTS"], errors="coerce")
+    merged["REB_ALLOWED"] = pd.to_numeric(merged["OPP_REB"], errors="coerce")
+    merged["AST_ALLOWED"] = pd.to_numeric(merged["OPP_AST"], errors="coerce")
 
-    merged = merged.sort_values([team_key, "GAME_DATE"], ascending=[True, False])
-
-    group_cols = [team_key]
+    # Season averages
+    season_group_cols = [team_key]
     if "TEAM_ABBREVIATION" in merged.columns:
-        group_cols.append("TEAM_ABBREVIATION")
+        season_group_cols.append("TEAM_ABBREVIATION")
 
-    recent = (
-        merged.groupby(team_key, group_keys=False)
-        .head(last_n_games)
-        .groupby(group_cols, as_index=False)
+    season_df = (
+        merged.groupby(season_group_cols, as_index=False)
         .agg(
-            PTS_ALLOWED=("PTS_ALLOWED", "mean"),
-            REB_ALLOWED=("REB_ALLOWED", "mean"),
-            AST_ALLOWED=("AST_ALLOWED", "mean"),
+            PTS_ALLOWED_SEASON=("PTS_ALLOWED", "mean"),
+            REB_ALLOWED_SEASON=("REB_ALLOWED", "mean"),
+            AST_ALLOWED_SEASON=("AST_ALLOWED", "mean"),
         )
     )
 
-    recent["PTS_ALLOWED"] = recent["PTS_ALLOWED"].round(2)
-    recent["REB_ALLOWED"] = recent["REB_ALLOWED"].round(2)
-    recent["AST_ALLOWED"] = recent["AST_ALLOWED"].round(2)
+    # Recent averages
+    merged = merged.sort_values([team_key, "GAME_DATE"], ascending=[True, False])
 
-    return recent
+    recent_df = (
+        merged.groupby(team_key, group_keys=False)
+        .head(last_n_games)
+        .groupby(season_group_cols, as_index=False)
+        .agg(
+            PTS_ALLOWED_RECENT=("PTS_ALLOWED", "mean"),
+            REB_ALLOWED_RECENT=("REB_ALLOWED", "mean"),
+            AST_ALLOWED_RECENT=("AST_ALLOWED", "mean"),
+        )
+    )
+
+    defensive_df = season_df.merge(recent_df, on=season_group_cols, how="left")
+
+    defensive_df["PTS_ALLOWED_FINAL"] = (
+        defensive_df["PTS_ALLOWED_SEASON"] * 0.70 +
+        defensive_df["PTS_ALLOWED_RECENT"] * 0.30
+    )
+    defensive_df["REB_ALLOWED_FINAL"] = (
+        defensive_df["REB_ALLOWED_SEASON"] * 0.70 +
+        defensive_df["REB_ALLOWED_RECENT"] * 0.30
+    )
+    defensive_df["AST_ALLOWED_FINAL"] = (
+        defensive_df["AST_ALLOWED_SEASON"] * 0.70 +
+        defensive_df["AST_ALLOWED_RECENT"] * 0.30
+    )
+
+    for col in [
+        "PTS_ALLOWED_SEASON", "REB_ALLOWED_SEASON", "AST_ALLOWED_SEASON",
+        "PTS_ALLOWED_RECENT", "REB_ALLOWED_RECENT", "AST_ALLOWED_RECENT",
+        "PTS_ALLOWED_FINAL", "REB_ALLOWED_FINAL", "AST_ALLOWED_FINAL",
+    ]:
+        if col in defensive_df.columns:
+            defensive_df[col] = defensive_df[col].round(2)
+
+    return defensive_df
 
 
 # =========================
@@ -1097,7 +1123,7 @@ def ordinal_rank(n: int):
 
 
 # =========================
-# TRUE DVP / MATCHUP HELPERS
+# TRUE DVS / MATCHUP HELPERS
 # =========================
 def get_team_pace(team_abbr: str, team_adv_df: pd.DataFrame):
     if team_adv_df.empty or not team_abbr or "TEAM_ABBR" not in team_adv_df.columns:
@@ -1166,37 +1192,38 @@ def usage_multiplier(player_id: int, stat: str, player_adv_df: pd.DataFrame):
     return round(mult, 4), round(float(usg), 4)
 
 
-def get_true_dvp_rank(opponent_abbr: str, stat: str, team_allowed_df: pd.DataFrame):
-    if team_allowed_df.empty or not opponent_abbr or "TEAM_ABBREVIATION" not in team_allowed_df.columns:
+def get_true_dvs_rank(opponent_abbr: str, stat: str, defensive_df: pd.DataFrame):
+    if defensive_df.empty or not opponent_abbr or "TEAM_ABBREVIATION" not in defensive_df.columns:
         return math.nan
 
     if stat == "PTS":
-        col = "PTS_ALLOWED"
+        col = "PTS_ALLOWED_FINAL"
     elif stat == "REB":
-        col = "REB_ALLOWED"
+        col = "REB_ALLOWED_FINAL"
     else:
-        col = "AST_ALLOWED"
+        col = "AST_ALLOWED_FINAL"
 
-    if col not in team_allowed_df.columns:
+    if col not in defensive_df.columns:
         return math.nan
 
-    temp = team_allowed_df[["TEAM_ABBREVIATION", col]].copy()
+    temp = defensive_df[["TEAM_ABBREVIATION", col]].copy()
     temp[col] = pd.to_numeric(temp[col], errors="coerce")
     temp = temp.dropna(subset=[col])
 
     if temp.empty:
         return math.nan
 
-    temp["DVP_RANK"] = temp[col].rank(method="min", ascending=True)
+    # 1 = toughest (fewest allowed), 30 = easiest (most allowed)
+    temp["DVS_RANK"] = temp[col].rank(method="min", ascending=True)
 
     row = temp[temp["TEAM_ABBREVIATION"] == opponent_abbr]
     if row.empty:
         return math.nan
 
-    return float(row.iloc[0]["DVP_RANK"])
+    return float(row.iloc[0]["DVS_RANK"])
 
 
-def dvp_bonus_from_true_rank(rank_val: float):
+def dvs_bonus_from_true_rank(rank_val: float):
     if pd.isna(rank_val):
         return 0.0
     if rank_val >= 26:
@@ -1212,41 +1239,41 @@ def dvp_bonus_from_true_rank(rank_val: float):
     return -5.0
 
 
-def true_dvp_context(opponent_abbr: str, stat: str, team_allowed_df: pd.DataFrame):
-    rank_val = get_true_dvp_rank(opponent_abbr, stat, team_allowed_df)
+def true_dvs_context(opponent_abbr: str, stat: str, defensive_df: pd.DataFrame):
+    rank_val = get_true_dvs_rank(opponent_abbr, stat, defensive_df)
     if pd.isna(rank_val):
-        return math.nan, 0.0, "Neutral DVP"
+        return math.nan, 0.0, "Neutral DVS"
 
-    bonus = dvp_bonus_from_true_rank(rank_val)
+    bonus = dvs_bonus_from_true_rank(rank_val)
     note = f"{ordinal_rank(int(round(rank_val, 0)))} vs {stat}"
     return rank_val, bonus, note
 
 
-def opponent_allowance_multiplier(opponent_abbr: str, stat: str, team_allowed_df: pd.DataFrame):
-    if team_allowed_df.empty or not opponent_abbr:
+def opponent_allowance_multiplier(opponent_abbr: str, stat: str, defensive_df: pd.DataFrame):
+    if defensive_df.empty or not opponent_abbr:
         return 1.00, math.nan, "Neutral opponent stat environment"
 
-    if "TEAM_ABBREVIATION" not in team_allowed_df.columns:
+    if "TEAM_ABBREVIATION" not in defensive_df.columns:
         return 1.00, math.nan, "Neutral opponent stat environment"
 
-    row = team_allowed_df[team_allowed_df["TEAM_ABBREVIATION"] == opponent_abbr]
+    row = defensive_df[defensive_df["TEAM_ABBREVIATION"] == opponent_abbr]
     if row.empty:
         return 1.00, math.nan, "Neutral opponent stat environment"
 
     row = row.iloc[0]
 
     if stat == "PTS":
-        col = "PTS_ALLOWED"
+        col = "PTS_ALLOWED_FINAL"
     elif stat == "REB":
-        col = "REB_ALLOWED"
+        col = "REB_ALLOWED_FINAL"
     else:
-        col = "AST_ALLOWED"
+        col = "AST_ALLOWED_FINAL"
 
-    if col not in team_allowed_df.columns:
+    if col not in defensive_df.columns:
         return 1.00, math.nan, "Neutral opponent stat environment"
 
     allowed_val = pd.to_numeric(pd.Series([row[col]]), errors="coerce").iloc[0]
-    league_avg = pd.to_numeric(team_allowed_df[col], errors="coerce").dropna().mean()
+    league_avg = pd.to_numeric(defensive_df[col], errors="coerce").dropna().mean()
 
     if pd.isna(allowed_val) or pd.isna(league_avg) or league_avg == 0:
         return 1.00, math.nan, "Neutral opponent stat environment"
@@ -1275,7 +1302,7 @@ def improved_hidden_gem_score(
     minutes_stability: float,
     expected_min: float,
     volatility_penalty: float,
-    dvp_bonus: float = 0.0,
+    dvs_bonus: float = 0.0,
 ):
     l5 = 50.0 if pd.isna(l5_hit) else l5_hit
     l10 = 50.0 if pd.isna(l10_hit) else l10_hit
@@ -1290,7 +1317,7 @@ def improved_hidden_gem_score(
     )
 
     score = score - (0 if pd.isna(volatility_penalty) else volatility_penalty)
-    score = score + dvp_bonus
+    score = score + dvs_bonus
 
     if not pd.isna(expected_min):
         if expected_min < 20:
@@ -1349,7 +1376,7 @@ def build_cheatsheet(props_df: pd.DataFrame, injury_map: dict):
 
     team_adv_df = get_team_advanced_stats()
     player_adv_df = get_player_advanced_stats()
-    team_allowed_df = get_team_recent_allowed_stats(last_n_games=10)
+    defensive_df = get_team_defensive_stats(last_n_games=10)
 
     rows = []
     progress_text = st.empty()
@@ -1411,9 +1438,9 @@ def build_cheatsheet(props_df: pd.DataFrame, injury_map: dict):
         pace_mult, team_pace, opp_pace = pace_multiplier(team, opponent, team_adv_df)
         usg_mult, usg_pct = usage_multiplier(player_id, stat, player_adv_df)
 
-        dvp_rank, dvp_bonus, dvp_note = true_dvp_context(opponent, stat, team_allowed_df)
+        dvs_rank, dvs_bonus, dvs_note = true_dvs_context(opponent, stat, defensive_df)
         opp_allow_mult, opp_allow_val, opp_allow_note = opponent_allowance_multiplier(
-            opponent, stat, team_allowed_df
+            opponent, stat, defensive_df
         )
 
         projection = (
@@ -1431,7 +1458,7 @@ def build_cheatsheet(props_df: pd.DataFrame, injury_map: dict):
             minutes_stability=min_stability,
             expected_min=exp_min,
             volatility_penalty=volatility_pen,
-            dvp_bonus=dvp_bonus,
+            dvs_bonus=dvs_bonus,
         )
         hidden_gem = max(0, min(100, hidden_gem + gem_adj))
 
@@ -1454,8 +1481,8 @@ def build_cheatsheet(props_df: pd.DataFrame, injury_map: dict):
                 "EXPECTED_MIN": exp_min,
                 "MIN_STABILITY": min_stability,
                 "VOLATILITY_PENALTY": volatility_pen,
-                "DVP_RANK": dvp_rank,
-                "DVP_NOTE": dvp_note,
+                "DVS_RANK": dvs_rank,
+                "DVS_NOTE": dvs_note,
                 "INJURY_NOTE": injury_note,
                 "TEAM_PACE": team_pace,
                 "OPP_PACE": opp_pace,
@@ -1524,11 +1551,11 @@ def render_single_card(row, rank_num=None, compact=False):
             f'</div>'
         )
 
-    dvp_rank = row.get("DVP_RANK", math.nan)
-    if pd.isna(dvp_rank):
-        dvp_display = "Neutral"
+    dvs_rank = row.get("DVS_RANK", math.nan)
+    if pd.isna(dvs_rank):
+        dvs_display = "Neutral"
     else:
-        dvp_display = f'{ordinal_rank(int(round(float(dvp_rank), 0)))} vs {row["STAT"]}'
+        dvs_display = f'{ordinal_rank(int(round(float(dvs_rank), 0)))} vs {row["STAT"]}'
 
     usg_pct = row.get("USG_PCT", math.nan)
     if pd.isna(usg_pct):
@@ -1598,8 +1625,8 @@ def render_single_card(row, rank_num=None, compact=False):
                     f'<div class="metric-value">{usg_display}</div>'
                 f'</div>'
                 f'<div class="metric-box-wrap">'
-                    f'<div class="metric-label">DVP Rank</div>'
-                    f'<div class="metric-value">{dvp_display}</div>'
+                    f'<div class="metric-label">DVS Rank</div>'
+                    f'<div class="metric-value">{dvs_display}</div>'
                 f'</div>'
             f'</div>'
         f'</div>'
