@@ -26,7 +26,11 @@ ODDS_SLEEP = 0.25
 # =========================
 # PAGE SETUP
 # =========================
-st.set_page_config(page_title="Rina's Cheatsheet", layout="wide")
+st.set_page_config(
+    page_title="Rina's Cheatsheet",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
 st.markdown(
     """
@@ -39,7 +43,7 @@ st.markdown(
     .block-container {
         padding-top: 2.2rem;
         padding-bottom: 2rem;
-        max-width: 1400px;
+        max-width: 1500px;
     }
 
     h1, h2, h3 {
@@ -47,7 +51,7 @@ st.markdown(
     }
 
     .title-wrap {
-        margin-bottom: 1rem;
+        margin-bottom: 0.8rem;
     }
 
     .app-title {
@@ -62,6 +66,7 @@ st.markdown(
         color: #94a3b8;
         font-size: 0.98rem;
         margin-top: 0;
+        margin-bottom: 0.5rem;
     }
 
     .section-title {
@@ -69,6 +74,15 @@ st.markdown(
         font-weight: 800;
         margin: 1rem 0 0.8rem 0;
         color: #f8fafc;
+    }
+
+    .control-card {
+        background: linear-gradient(180deg, rgba(18, 25, 41, 0.96), rgba(13, 19, 32, 0.96));
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 18px;
+        padding: 18px 18px 14px 18px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.20);
+        margin-bottom: 1rem;
     }
 
     .bet-card {
@@ -215,9 +229,8 @@ st.markdown(
         align-items: center;
     }
 
-    section[data-testid="stSidebar"] {
-        background: rgba(10, 16, 29, 0.98);
-        border-right: 1px solid rgba(148, 163, 184, 0.10);
+    [data-testid="collapsedControl"] {
+        display: none;
     }
 
     @media (max-width: 900px) {
@@ -330,108 +343,6 @@ def player_name_to_id(name: str):
             return p["id"]
 
     return None
-
-
-# =========================
-# INJURY INPUT HELPERS
-# =========================
-def parse_injury_input(text: str):
-    """
-    Formats supported:
-    DEN: Jamal Murray
-    PHX: Bradley Beal, Devin Booker
-    LAL: LeBron James doubtful, Anthony Davis questionable
-    """
-    injury_map = {}
-
-    if not text or not text.strip():
-        return injury_map
-
-    lines = text.splitlines()
-
-    for raw_line in lines:
-        line = raw_line.strip()
-        if not line or ":" not in line:
-            continue
-
-        team, players_part = line.split(":", 1)
-        team = team.strip().upper()
-
-        if team not in TEAM_ABBR_TO_ID:
-            continue
-
-        injury_map[team] = {
-            "out": [],
-            "questionable": [],
-            "doubtful": [],
-            "probable": []
-        }
-
-        players_list = [p.strip() for p in players_part.split(",") if p.strip()]
-
-        for item in players_list:
-            lower_item = item.lower()
-
-            if lower_item.endswith(" questionable"):
-                player_name = item[: -len(" questionable")].strip()
-                if player_name:
-                    injury_map[team]["questionable"].append(player_name)
-            elif lower_item.endswith(" doubtful"):
-                player_name = item[: -len(" doubtful")].strip()
-                if player_name:
-                    injury_map[team]["doubtful"].append(player_name)
-            elif lower_item.endswith(" probable"):
-                player_name = item[: -len(" probable")].strip()
-                if player_name:
-                    injury_map[team]["probable"].append(player_name)
-            elif lower_item.endswith(" out"):
-                player_name = item[: -len(" out")].strip()
-                if player_name:
-                    injury_map[team]["out"].append(player_name)
-            else:
-                injury_map[team]["out"].append(item)
-
-    return injury_map
-
-
-def injury_adjustment(team_injuries, stat):
-    out_count = len(team_injuries.get("out", []))
-    questionable_count = len(team_injuries.get("questionable", []))
-    doubtful_count = len(team_injuries.get("doubtful", []))
-    probable_count = len(team_injuries.get("probable", []))
-
-    projection_boost = 1.0
-    hidden_gem_boost = 0.0
-    note_parts = []
-
-    if out_count > 0:
-        if stat == "PTS":
-            projection_boost += min(0.06, out_count * 0.02)
-            hidden_gem_boost += min(5.0, out_count * 2.0)
-        elif stat == "AST":
-            projection_boost += min(0.05, out_count * 0.018)
-            hidden_gem_boost += min(4.5, out_count * 1.8)
-        elif stat == "REB":
-            projection_boost += min(0.04, out_count * 0.015)
-            hidden_gem_boost += min(4.0, out_count * 1.5)
-
-        note_parts.append(f"{out_count} out")
-
-    if doubtful_count > 0:
-        projection_boost += min(0.02, doubtful_count * 0.008)
-        hidden_gem_boost += min(2.0, doubtful_count * 0.8)
-        note_parts.append(f"{doubtful_count} doubtful")
-
-    if questionable_count > 0:
-        projection_boost += min(0.01, questionable_count * 0.005)
-        hidden_gem_boost += min(1.0, questionable_count * 0.5)
-        note_parts.append(f"{questionable_count} questionable")
-
-    if probable_count > 0:
-        note_parts.append(f"{probable_count} probable")
-
-    note = ", ".join(note_parts) if note_parts else "No major injury context"
-    return round(projection_boost, 4), round(hidden_gem_boost, 1), note
 
 
 # =========================
@@ -652,6 +563,110 @@ def get_team_game_log(team_id: int):
     df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"])
     df = df.sort_values("GAME_DATE", ascending=False).reset_index(drop=True)
     return df
+
+
+# =========================
+# INJURY HELPERS
+# =========================
+def build_injury_map_from_selections(
+    out_players,
+    questionable_players,
+    doubtful_players,
+    probable_players,
+):
+    injury_map = {}
+
+    status_dict = {
+        "out": out_players or [],
+        "questionable": questionable_players or [],
+        "doubtful": doubtful_players or [],
+        "probable": probable_players or [],
+    }
+
+    for status, plist in status_dict.items():
+        for player in plist:
+            pid = player_name_to_id(player)
+            if pid is None:
+                continue
+
+            try:
+                log = get_game_log(pid)
+            except Exception:
+                continue
+
+            if log.empty:
+                continue
+
+            team = infer_team_from_log(log)
+            if not team:
+                continue
+
+            if team not in injury_map:
+                injury_map[team] = {
+                    "out": [],
+                    "questionable": [],
+                    "doubtful": [],
+                    "probable": [],
+                }
+
+            if player not in injury_map[team][status]:
+                injury_map[team][status].append(player)
+
+    return injury_map
+
+
+def injury_adjustment(team_injuries, stat):
+    out_count = len(team_injuries.get("out", []))
+    questionable_count = len(team_injuries.get("questionable", []))
+    doubtful_count = len(team_injuries.get("doubtful", []))
+    probable_count = len(team_injuries.get("probable", []))
+
+    # positive: more opportunity
+    # negative: efficiency / role uncertainty / returning usage competition
+    if stat == "PTS":
+        volume_boost = (0.014 * out_count) + (0.008 * doubtful_count)
+        efficiency_penalty = (0.006 * out_count) + (0.003 * doubtful_count)
+        uncertainty_penalty = 0.004 * questionable_count
+        returning_penalty = 0.010 * probable_count
+    elif stat == "AST":
+        volume_boost = (0.010 * out_count) + (0.006 * doubtful_count)
+        efficiency_penalty = (0.010 * out_count) + (0.004 * doubtful_count)
+        uncertainty_penalty = 0.004 * questionable_count
+        returning_penalty = 0.008 * probable_count
+    else:  # REB
+        volume_boost = (0.012 * out_count) + (0.007 * doubtful_count)
+        efficiency_penalty = (0.003 * out_count) + (0.002 * doubtful_count)
+        uncertainty_penalty = 0.003 * questionable_count
+        returning_penalty = 0.006 * probable_count
+
+    net_projection_multiplier = 1 + volume_boost - efficiency_penalty - uncertainty_penalty - returning_penalty
+    net_projection_multiplier = max(0.90, min(1.08, net_projection_multiplier))
+
+    hidden_gem_adjustment = (
+        (volume_boost * 100 * 0.9)
+        - (efficiency_penalty * 100 * 0.6)
+        - (questionable_count * 1.2)
+        - (probable_count * 1.5)
+    )
+    hidden_gem_adjustment = round(max(-8.0, min(8.0, hidden_gem_adjustment)), 1)
+
+    note_parts = []
+    if out_count:
+        note_parts.append(f"{out_count} out")
+    if doubtful_count:
+        note_parts.append(f"{doubtful_count} doubtful")
+    if questionable_count:
+        note_parts.append(f"{questionable_count} questionable")
+    if probable_count:
+        note_parts.append(f"{probable_count} probable")
+
+    if not note_parts:
+        note = "No major injury context"
+    else:
+        direction = "slight boost" if hidden_gem_adjustment > 0.5 else "slight downgrade" if hidden_gem_adjustment < -0.5 else "mixed impact"
+        note = f"{', '.join(note_parts)} • {direction}"
+
+    return round(net_projection_multiplier, 4), hidden_gem_adjustment, note
 
 
 # =========================
@@ -986,7 +1001,7 @@ def build_cheatsheet(props_df: pd.DataFrame, injury_map: dict):
             "out": [],
             "questionable": [],
             "doubtful": [],
-            "probable": []
+            "probable": [],
         })
 
         l5_hit = stat_hit_rate(log, stat, line, 5)
@@ -1005,10 +1020,10 @@ def build_cheatsheet(props_df: pd.DataFrame, injury_map: dict):
         volatility_pen = stat_volatility_penalty(log, stat, 10)
 
         dvp_rank, dvp_mult, dvp_bonus, dvp_note = opponent_dvp_context(opponent)
-        proj_boost, gem_boost, injury_note = injury_adjustment(team_injuries, stat)
+        proj_mult, gem_adj, injury_note = injury_adjustment(team_injuries, stat)
 
         projection = (
-            round(base_projection * dvp_mult * proj_boost, 2)
+            round(base_projection * dvp_mult * proj_mult, 2)
             if not pd.isna(base_projection)
             else math.nan
         )
@@ -1024,7 +1039,7 @@ def build_cheatsheet(props_df: pd.DataFrame, injury_map: dict):
             volatility_penalty=volatility_pen,
             dvp_bonus=dvp_bonus,
         )
-        hidden_gem = max(0, min(100, hidden_gem + gem_boost))
+        hidden_gem = max(0, min(100, hidden_gem + gem_adj))
 
         lean = get_lean(projection, line)
 
@@ -1231,45 +1246,102 @@ def render_full_cheatsheet_cards(df: pd.DataFrame):
 
 
 # =========================
-# SIDEBAR
+# PREVIEW DATA FOR CONTROLS
 # =========================
-with st.sidebar:
-    view_mode = st.selectbox(
-        "View",
-        ["All", "Best Overs", "Best Unders", "Full Cheatsheet"],
-        index=0
-    )
-
-    stat_filter = st.selectbox(
-        "Filter stat",
-        ["ALL", "PTS", "REB", "AST"],
-        index=0
-    )
-
-    st.markdown("### Pregame Injuries")
-    injury_text = st.text_area(
-        "Enter injuries",
-        value="",
-        height=140,
-        placeholder="DEN: Jamal Murray out\nLAL: Anthony Davis questionable\nPHX: Bradley Beal out"
-    )
-
-
 props_preview = get_props()
-player_options_preview = []
-if not props_preview.empty:
-    temp_preview = props_preview.copy()
-    if stat_filter != "ALL":
-        temp_preview = temp_preview[temp_preview["STAT"] == stat_filter]
-    player_options_preview = sorted(temp_preview["PLAYER_NAME"].dropna().unique().tolist())
 
-with st.sidebar:
-    selected_player = st.selectbox(
-        "Search player",
-        options=["All Players"] + player_options_preview,
-        index=0
-    )
-    run_model = st.button("Run Selected View")
+player_options_preview = []
+injury_player_options = []
+
+if not props_preview.empty:
+    player_options_preview = sorted(props_preview["PLAYER_NAME"].dropna().unique().tolist())
+    injury_player_options = player_options_preview.copy()
+
+
+# =========================
+# CENTERED CONTROLS
+# =========================
+left_spacer, center_col, right_spacer = st.columns([1, 5, 1])
+
+with center_col:
+    st.markdown('<div class="control-card">', unsafe_allow_html=True)
+
+    top_controls = st.columns(4)
+
+    with top_controls[0]:
+        view_mode = st.selectbox(
+            "View",
+            ["All", "Best Overs", "Best Unders", "Full Cheatsheet"],
+            index=0,
+            key="view_mode_main",
+        )
+
+    with top_controls[1]:
+        stat_filter = st.selectbox(
+            "Filter stat",
+            ["ALL", "PTS", "REB", "AST"],
+            index=0,
+            key="stat_filter_main",
+        )
+
+    filtered_player_preview = player_options_preview
+    if not props_preview.empty and stat_filter != "ALL":
+        filtered_player_preview = sorted(
+            props_preview[props_preview["STAT"] == stat_filter]["PLAYER_NAME"].dropna().unique().tolist()
+        )
+
+    with top_controls[2]:
+        selected_player = st.selectbox(
+            "Search player",
+            options=["All Players"] + filtered_player_preview,
+            index=0,
+            key="selected_player_main",
+        )
+
+    with top_controls[3]:
+        run_model = st.button("Run Selected View", use_container_width=True)
+
+    with st.expander("Pregame Injuries", expanded=False):
+        injury_cols_1 = st.columns(2)
+        injury_cols_2 = st.columns(2)
+
+        with injury_cols_1[0]:
+            injured_out = st.multiselect(
+                "Out",
+                options=injury_player_options,
+                default=[],
+                placeholder="Search players...",
+                key="injured_out",
+            )
+
+        with injury_cols_1[1]:
+            injured_questionable = st.multiselect(
+                "Questionable",
+                options=injury_player_options,
+                default=[],
+                placeholder="Search players...",
+                key="injured_questionable",
+            )
+
+        with injury_cols_2[0]:
+            injured_doubtful = st.multiselect(
+                "Doubtful",
+                options=injury_player_options,
+                default=[],
+                placeholder="Search players...",
+                key="injured_doubtful",
+            )
+
+        with injury_cols_2[1]:
+            injured_probable = st.multiselect(
+                "Probable / Returning",
+                options=injury_player_options,
+                default=[],
+                placeholder="Search players...",
+                key="injured_probable",
+            )
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # =========================
@@ -1292,7 +1364,13 @@ if run_model:
         st.warning("No props matched your filters.")
         st.stop()
 
-    injury_map = parse_injury_input(injury_text)
+    injury_map = build_injury_map_from_selections(
+        injured_out,
+        injured_questionable,
+        injured_doubtful,
+        injured_probable,
+    )
+
     cheatsheet = build_cheatsheet(props_df, injury_map)
 
     if cheatsheet.empty:
@@ -1334,4 +1412,4 @@ if run_model:
     )
 
 else:
-    st.info("Choose a view, optional filters, add injuries if needed, and click Run Selected View.")
+    st.info("Pick your filters, add injuries in the dropdowns if needed, then click Run Selected View.")
