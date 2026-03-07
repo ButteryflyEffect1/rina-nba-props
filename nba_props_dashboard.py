@@ -46,10 +46,6 @@ st.markdown(
         max-width: 1500px;
     }
 
-    h1, h2, h3 {
-        letter-spacing: -0.4px;
-    }
-
     .title-wrap {
         margin-bottom: 0.8rem;
     }
@@ -89,7 +85,7 @@ st.markdown(
         background: linear-gradient(180deg, rgba(18, 25, 41, 0.96), rgba(13, 19, 32, 0.96));
         border: 1px solid rgba(148, 163, 184, 0.16);
         border-radius: 16px;
-        padding: 12px 14px;
+        padding: 14px 14px 12px 14px;
         box-shadow: 0 8px 20px rgba(0, 0, 0, 0.20);
         margin-bottom: 12px;
         height: 100%;
@@ -100,7 +96,7 @@ st.markdown(
         justify-content: space-between;
         align-items: flex-start;
         gap: 10px;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
     }
 
     .player-name {
@@ -120,7 +116,7 @@ st.markdown(
         display: flex;
         gap: 7px;
         flex-wrap: wrap;
-        margin-top: 5px;
+        margin-top: 6px;
     }
 
     .pill {
@@ -1107,6 +1103,79 @@ def format_num(x, decimals=1):
     return f"{float(x):.{decimals}f}"
 
 
+def lean_pill_class(lean: str):
+    if lean == "OVER":
+        return "pill-over"
+    if lean == "UNDER":
+        return "pill-under"
+    return "pill-pass"
+
+
+def render_single_card(row, rank_num=None):
+    pill_class = lean_pill_class(row["LEAN"])
+    rank_html = f'<span class="rank-badge">#{rank_num}</span>' if rank_num is not None else ""
+
+    st.markdown(
+        f"""
+        <div class="bet-card">
+          <div class="bet-top">
+            <div>
+              <div class="row-head">
+                {rank_html}
+                <div>
+                  <div class="player-name">{row['PLAYER']}</div>
+                  <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
+                </div>
+              </div>
+
+              <div class="pill-row">
+                <span class="pill pill-stat">{row['STAT']}</span>
+                <span class="pill {pill_class}">{row['LEAN']}</span>
+              </div>
+            </div>
+
+            <div class="card-linebox">
+              <div class="line-label">Line</div>
+              <div class="line-value">{format_num(row['LINE'])}</div>
+            </div>
+          </div>
+
+          <div class="metrics-grid">
+            <div class="metric-box">
+              <div class="metric-label">Projection</div>
+              <div class="metric-value">{format_num(row['PROJECTION'])}</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">L10 Avg</div>
+              <div class="metric-value">{format_num(row['L10_AVG'])}</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">L10 Hit Rate</div>
+              <div class="metric-value">{format_num(row['L10_HIT_RATE'], 0)}%</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Season Hit Rate</div>
+              <div class="metric-value">{format_num(row['SEASON_HIT_RATE'], 0)}%</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Hidden Gem</div>
+              <div class="metric-value metric-score">{int(round(row['CONFIDENCE'], 0))}%</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">DVP</div>
+              <div class="metric-value">{row['DVP_NOTE']}</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Injury Context</div>
+              <div class="metric-value">{row.get('INJURY_NOTE', 'No major injury context')}</div>
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_bet_cards(df: pd.DataFrame, lean_type: str):
     subset = df[df["LEAN"] == lean_type].copy()
 
@@ -1115,59 +1184,18 @@ def render_bet_cards(df: pd.DataFrame, lean_type: str):
             by=["EDGE", "CONFIDENCE", "L10_HIT_RATE"],
             ascending=[False, False, False]
         ).head(5)
-        pill_class = "pill-over"
     else:
         subset = subset.sort_values(
             by=["EDGE", "CONFIDENCE", "L10_HIT_RATE"],
             ascending=[True, False, True]
         ).head(5)
-        pill_class = "pill-under"
 
     if subset.empty:
         st.info(f"No {lean_type} plays matched the current filters.")
         return
 
     for _, row in subset.iterrows():
-        st.markdown(
-            f"""
-            <div class="bet-card">
-              <div class="bet-top">
-                <div>
-                  <div class="player-name">{row['PLAYER']}</div>
-                  <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
-                  <div class="pill-row">
-                    <span class="pill pill-stat">{row['STAT']}</span>
-                    <span class="pill {pill_class}">{row['LEAN']}</span>
-                  </div>
-                </div>
-                <div class="card-linebox">
-                  <div class="line-label">Line</div>
-                  <div class="line-value">{format_num(row['LINE'])}</div>
-                </div>
-              </div>
-
-              <div class="metrics-grid">
-                <div class="metric-box">
-                  <div class="metric-label">Projection</div>
-                  <div class="metric-value">{format_num(row['PROJECTION'])}</div>
-                </div>
-                <div class="metric-box">
-                  <div class="metric-label">L10 Avg</div>
-                  <div class="metric-value">{format_num(row['L10_AVG'])}</div>
-                </div>
-                <div class="metric-box">
-                  <div class="metric-label">L10 Hit Rate</div>
-                  <div class="metric-value">{format_num(row['L10_HIT_RATE'], 0)}%</div>
-                </div>
-                <div class="metric-box">
-                  <div class="metric-label">Hidden Gem</div>
-                  <div class="metric-value metric-score">{int(round(row['CONFIDENCE'], 0))}%</div>
-                </div>
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        render_single_card(row)
 
 
 def render_full_cheatsheet_cards(df: pd.DataFrame):
@@ -1185,75 +1213,9 @@ def render_full_cheatsheet_cards(df: pd.DataFrame):
                 continue
 
             row = ranked_df.iloc[row_idx]
-            rank_num = row_idx + 1
-
-            if row["LEAN"] == "OVER":
-                pill_class = "pill-over"
-            elif row["LEAN"] == "UNDER":
-                pill_class = "pill-under"
-            else:
-                pill_class = "pill-pass"
 
             with cols[col_idx]:
-                st.markdown(
-                    f"""
-                    <div class="bet-card">
-                      <div class="bet-top">
-                        <div>
-                          <div class="row-head">
-                            <span class="rank-badge">#{rank_num}</span>
-                            <div>
-                              <div class="player-name">{row['PLAYER']}</div>
-                              <div class="meta-line">{row['TEAM']} vs {row['OPPONENT']}</div>
-                            </div>
-                          </div>
-
-                          <div class="pill-row" style="margin-top:8px;">
-                            <span class="pill pill-stat">{row['STAT']}</span>
-                            <span class="pill {pill_class}">{row['LEAN']}</span>
-                          </div>
-                        </div>
-
-                        <div class="card-linebox">
-                          <div class="line-label">Line</div>
-                          <div class="line-value">{format_num(row['LINE'])}</div>
-                        </div>
-                      </div>
-
-                      <div class="metrics-grid">
-                        <div class="metric-box">
-                          <div class="metric-label">Projection</div>
-                          <div class="metric-value">{format_num(row['PROJECTION'])}</div>
-                        </div>
-                        <div class="metric-box">
-                          <div class="metric-label">L10 Avg</div>
-                          <div class="metric-value">{format_num(row['L10_AVG'])}</div>
-                        </div>
-                        <div class="metric-box">
-                          <div class="metric-label">L10 Hit Rate</div>
-                          <div class="metric-value">{format_num(row['L10_HIT_RATE'], 0)}%</div>
-                        </div>
-                        <div class="metric-box">
-                          <div class="metric-label">Season Hit Rate</div>
-                          <div class="metric-value">{format_num(row['SEASON_HIT_RATE'], 0)}%</div>
-                        </div>
-                        <div class="metric-box">
-                          <div class="metric-label">Hidden Gem</div>
-                          <div class="metric-value metric-score">{int(round(row['CONFIDENCE'], 0))}%</div>
-                        </div>
-                        <div class="metric-box">
-                          <div class="metric-label">DVP</div>
-                          <div class="metric-value">{row['DVP_NOTE']}</div>
-                        </div>
-                        <div class="metric-box">
-                          <div class="metric-label">Injury Context</div>
-                          <div class="metric-value">{row.get('INJURY_NOTE', 'No major injury context')}</div>
-                        </div>
-                      </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                render_single_card(row, rank_num=row_idx + 1)
 
 
 # =========================
